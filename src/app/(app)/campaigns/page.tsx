@@ -43,6 +43,7 @@ import { auth } from '@/lib/firebase';
 import { getCampaigns, deleteCampaign, type Campaign } from '@/services/campaigns';
 import { getRecipientLists, type RecipientList } from '@/services/recipients';
 import { useToast } from '@/hooks/use-toast';
+import { cn } from '@/lib/utils';
 
 export default function CampaignsPage() {
   const [campaigns, setCampaigns] = React.useState<Campaign[]>([]);
