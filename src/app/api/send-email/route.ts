@@ -1,7 +1,7 @@
 // src/app/api/send-email/route.ts
 import { NextResponse, type NextRequest } from 'next/server';
 import nodemailer from 'nodemailer';
-import { db } from '@/lib/firebase'; // Using client SDK for simplicity
+import { db } from '@/lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 
 // Define the expected request body structure
@@ -9,6 +9,7 @@ interface SendEmailRequest {
   to: string;
   subject: string;
   html: string;
+  userId: string; // The ID of the user who owns the SMTP account
   fromEmailId: string; // The ID of the SMTP account document in Firestore
 }
 
@@ -42,19 +43,18 @@ export async function POST(request: NextRequest) {
     }
 
     const body: SendEmailRequest = await request.json();
-    const { to, subject, html, fromEmailId } = body;
+    const { to, subject, html, userId, fromEmailId } = body;
 
     // Validate request body
-    if (!to || !subject || !html || !fromEmailId) {
+    if (!to || !subject || !html || !userId || !fromEmailId) {
       return new NextResponse(JSON.stringify({ success: false, error: 'Missing required fields' }), {
         status: 400,
         headers: getCorsHeaders(),
       });
     }
 
-    // 3. Load SMTP configuration from Firestore
-    // This assumes a top-level `smtpAccounts` collection as requested.
-    const accountDocRef = doc(db, 'smtpAccounts', fromEmailId);
+    // 3. Load SMTP configuration from Firestore using the user-specific path
+    const accountDocRef = doc(db, 'users', userId, 'smtpAccounts', fromEmailId);
     const accountDoc = await getDoc(accountDocRef);
 
     if (!accountDoc.exists()) {
