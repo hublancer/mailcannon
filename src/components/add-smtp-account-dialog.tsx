@@ -27,8 +27,8 @@ export function AddSmtpAccountDialog({ isOpen, onOpenChange, onAddAccount }: Add
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      server: '',
-      port: 587,
+      server: 'smtp.hostinger.com',
+      port: 465,
       username: '',
       password: '',
     },
