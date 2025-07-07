@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, type FormEvent } from 'react';
+import { useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
@@ -16,55 +16,50 @@ import { Label } from '@/components/ui/label';
 import { MailCannonIcon } from '@/components/icons';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { AlertCircle, Loader2 } from "lucide-react"
-import { signInWithEmailAndPassword } from 'firebase/auth';
+import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 
-export default function LoginPage() {
+export default function RegisterPage() {
   const router = useRouter();
-  const [email, setEmail] = useState('admin@mailcannon.com');
-  const [password, setPassword] = useState('0300Ali$');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
 
-  useEffect(() => {
-    const unsubscribe = auth.onAuthStateChanged(user => {
-      if (user) {
-        router.replace('/campaigns');
-      } else {
-        setIsCheckingAuth(false);
-      }
-    });
-    return () => unsubscribe();
-  }, [router]);
-
-  const handleLogin = async (e: FormEvent) => {
+  const handleRegister = async (e: FormEvent) => {
     e.preventDefault();
     setError('');
+
+    if (password !== confirmPassword) {
+      setError("Passwords do not match.");
+      return;
+    }
+
     setIsLoading(true);
 
     try {
-      await signInWithEmailAndPassword(auth, email, password);
-      // The onAuthStateChanged listener will handle the redirect.
+      await createUserWithEmailAndPassword(auth, email, password);
+      router.push('/campaigns'); // Redirect to dashboard on successful registration
     } catch (err: any) {
-      if (err.code === 'auth/invalid-credential' || err.code === 'auth/invalid-email' || err.code === 'auth/wrong-password') {
-        setError('Invalid email or password.');
-      } else {
-        setError('An unexpected error occurred. Please try again.');
-        console.error(err);
+      switch (err.code) {
+        case 'auth/email-already-in-use':
+          setError('This email address is already in use.');
+          break;
+        case 'auth/weak-password':
+          setError('The password is too weak. It must be at least 6 characters long.');
+          break;
+        case 'auth/invalid-email':
+          setError('Please enter a valid email address.');
+          break;
+        default:
+          setError('An unexpected error occurred. Please try again.');
+          console.error(err);
       }
     } finally {
       setIsLoading(false);
     }
   };
-
-  if (isCheckingAuth) {
-    return (
-        <div className="flex items-center justify-center min-h-screen bg-background">
-            <Loader2 className="h-10 w-10 animate-spin text-primary" />
-        </div>
-    );
-  }
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-background p-4">
@@ -73,15 +68,15 @@ export default function LoginPage() {
           <div className="flex justify-center items-center mb-4">
              <MailCannonIcon className="w-10 h-10 text-primary" />
           </div>
-          <CardTitle className="text-2xl font-headline">Welcome Back</CardTitle>
-          <CardDescription>Enter your credentials to access your account.</CardDescription>
+          <CardTitle className="text-2xl font-headline">Create an Account</CardTitle>
+          <CardDescription>Enter your details to register.</CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleLogin} className="space-y-4">
+          <form onSubmit={handleRegister} className="space-y-4">
             {error && (
                <Alert variant="destructive">
                  <AlertCircle className="h-4 w-4" />
-                 <AlertTitle>Login Failed</AlertTitle>
+                 <AlertTitle>Registration Failed</AlertTitle>
                  <AlertDescription>
                    {error}
                  </AlertDescription>
@@ -92,7 +87,7 @@ export default function LoginPage() {
               <Input
                 id="email"
                 type="email"
-                placeholder="admin@mailcannon.com"
+                placeholder="you@example.com"
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -109,15 +104,26 @@ export default function LoginPage() {
                 onChange={(e) => setPassword(e.target.value)}
               />
             </div>
+            <div className="space-y-2">
+              <Label htmlFor="confirm-password">Confirm Password</Label>
+              <Input
+                id="confirm-password"
+                type="password"
+                required
+                placeholder="••••••••"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+              />
+            </div>
             <Button type="submit" className="w-full" disabled={isLoading}>
               {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Sign In
+              Sign Up
             </Button>
           </form>
           <div className="mt-4 text-center text-sm">
-            Don't have an account?{' '}
-            <Link href="/register" className="underline">
-              Sign Up
+            Already have an account?{' '}
+            <Link href="/login" className="underline">
+              Sign In
             </Link>
           </div>
         </CardContent>
