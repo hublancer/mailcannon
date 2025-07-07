@@ -1,3 +1,4 @@
+
 'use server';
 
 import { auth, db } from '@/lib/firebase';
@@ -26,43 +27,58 @@ export async function sendTestEmail({ smtpAccountId, toEmail }: SendTestEmailPar
 
         const smtpConfig = accountDoc.data();
 
+        // This transporter configuration is critical for compatibility.
         const transporter = nodemailer.createTransport({
             host: smtpConfig.server,
             port: smtpConfig.port,
-            secure: smtpConfig.secure, // Use the 'secure' flag from the database
+            secure: smtpConfig.secure, // Use SSL/TLS
             auth: {
                 user: smtpConfig.username,
-                pass: smtpConfig.password,
+                pass: smtpConfig.password, // Password fetched from server-side
             },
-            // Add this to trust self-signed certs, common in development/testing
+            // This setting is crucial for compatibility with many hosting providers
+            // like Hostinger who may use self-signed or non-standard SSL certificates.
             tls: {
-                rejectUnauthorized: false
-            }
+                rejectUnauthorized: false,
+            },
         });
 
         // Verify connection configuration
         await transporter.verify();
 
+        // Send the test email
         await transporter.sendMail({
             from: `"${smtpConfig.username}" <${smtpConfig.username}>`,
             to: toEmail,
-            subject: 'MailCannon - SMTP Test Email',
-            text: 'This is a test email from MailCannon to confirm your SMTP settings are working correctly.',
-            html: '<p>This is a test email from MailCannon to confirm your SMTP settings are working correctly.</p>',
+            subject: 'MailCannon - SMTP Connection Test',
+            text: 'Success! This is a test email from your MailCannon application to confirm your SMTP settings are working correctly.',
+            html: '<p><b>Success!</b></p><p>This is a test email from your MailCannon application to confirm your SMTP settings are working correctly.</p>',
         });
 
+        // Update the account status to 'Connected' in Firestore
         await updateSmtpAccountStatus(user.uid, smtpAccountId, 'Connected');
         
         return { success: true };
 
     } catch (error: any) {
         console.error('Failed to send test email:', error);
-        // Best effort to update status, don't block response if this fails
+        // If an error occurs, update the status to 'Error'
         try {
            await updateSmtpAccountStatus(user.uid, smtpAccountId, 'Error');
         } catch (statusError) {
            console.error('Failed to update status to Error:', statusError);
         }
-        return { success: false, error: `Connection failed: ${error.message}` };
+        
+        // Return a specific error message
+        let errorMessage = `Connection failed: ${error.message}`;
+        if (error.code === 'EAUTH') {
+            errorMessage = 'Authentication failed. Please check your username and password.';
+        } else if (error.code === 'ETIMEDOUT') {
+            errorMessage = 'Connection timed out. Please check your server and port.';
+        }
+
+        return { success: false, error: errorMessage };
     }
 }
+
+    

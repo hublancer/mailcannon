@@ -1,3 +1,4 @@
+
 import { db } from '@/lib/firebase';
 import { collection, addDoc, onSnapshot, query, doc, updateDoc, deleteDoc } from 'firebase/firestore';
 
@@ -20,7 +21,7 @@ export const addSmtpAccount = async (userId: string, accountData: SmtpAccountDat
     try {
         await addDoc(collection(db, 'users', userId, 'smtpAccounts'), {
             ...accountData,
-            status: 'Disconnected',
+            status: 'Disconnected', // Start as disconnected, test will verify
         });
     } catch (error) {
         console.error("Error adding SMTP account: ", error);
@@ -32,7 +33,13 @@ export const updateSmtpAccount = async (userId: string, accountId: string, accou
     if (!userId) throw new Error('User not logged in');
     try {
         const accountRef = doc(db, 'users', userId, 'smtpAccounts', accountId);
-        await updateDoc(accountRef, accountData);
+        // If updating an account, it's good practice to reset its status
+        // as the new credentials need to be verified.
+        const dataToUpdate = {
+            ...accountData,
+            status: 'Disconnected'
+        }
+        await updateDoc(accountRef, dataToUpdate);
     } catch (error) {
         console.error("Error updating SMTP account: ", error);
         throw new Error("Failed to update SMTP account.");
@@ -81,3 +88,5 @@ export const updateSmtpAccountStatus = async (userId: string, accountId: string,
         throw new Error("Failed to update SMTP account status.");
     }
 };
+
+    

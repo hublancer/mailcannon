@@ -1,3 +1,4 @@
+
 'use client';
 
 import * as React from 'react';
@@ -187,7 +188,7 @@ export default function SmtpAccountsPage() {
                       <TableCell>{account.secure ? 'Yes' : 'No'}</TableCell>
                       <TableCell>
                         <Badge variant={account.status === 'Error' ? 'destructive' : account.status === 'Connected' ? 'default' : 'secondary'}>
-                          <PowerIcon className={`mr-2 h-3 w-3 ${account.status === 'Connected' ? 'text-green-400' : 'text-red-400'}`} />
+                          <PowerIcon className={`mr-2 h-3 w-3 ${account.status === 'Connected' ? 'text-green-400' : (account.status === 'Error' ? 'text-red-400' : '')}`} />
                           {account.status}
                         </Badge>
                       </TableCell>
@@ -251,3 +252,5 @@ export default function SmtpAccountsPage() {
     </>
   );
 }
+
+    
