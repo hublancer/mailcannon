@@ -31,6 +31,8 @@ import { MailCannonIcon } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
+import { auth } from '@/lib/firebase';
+import { signOut } from 'firebase/auth';
 
 const navItems = [
   { href: '/campaigns', icon: Send, label: 'Campaigns' },
@@ -48,18 +50,24 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [isCheckingAuth, setIsCheckingAuth] = React.useState(true);
 
   React.useEffect(() => {
-    // This check only runs on the client-side
-    const isAuthenticated = localStorage.getItem('isAuthenticated');
-    if (isAuthenticated !== 'true') {
-      router.replace('/login');
-    } else {
-      setIsCheckingAuth(false);
-    }
-  }, [router, pathname]);
+    const unsubscribe = auth.onAuthStateChanged(user => {
+      if (!user) {
+        router.replace('/login');
+      } else {
+        setIsCheckingAuth(false);
+      }
+    });
+    // Cleanup subscription on unmount
+    return () => unsubscribe();
+  }, [router]);
 
-  const handleLogout = () => {
-    localStorage.removeItem('isAuthenticated');
-    router.push('/login');
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      router.push('/login');
+    } catch (error) {
+      console.error("Error signing out: ", error);
+    }
   };
 
   if (isCheckingAuth) {

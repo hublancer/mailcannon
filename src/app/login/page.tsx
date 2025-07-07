@@ -15,36 +15,49 @@ import { Label } from '@/components/ui/label';
 import { MailCannonIcon } from '@/components/icons';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { AlertCircle, Loader2 } from "lucide-react"
+import { signInWithEmailAndPassword } from 'firebase/auth';
+import { auth } from '@/lib/firebase';
 
 export default function LoginPage() {
   const router = useRouter();
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState('admin@mailcannon.com');
+  const [password, setPassword] = useState('0300Ali$');
   const [error, setError] = useState('');
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
 
   useEffect(() => {
-    // Prevent flash of login page if already authenticated
-    if (localStorage.getItem('isAuthenticated') === 'true') {
-      router.replace('/campaigns');
-    } else {
-      setIsLoading(false);
-    }
+    const unsubscribe = auth.onAuthStateChanged(user => {
+      if (user) {
+        router.replace('/campaigns');
+      } else {
+        setIsCheckingAuth(false);
+      }
+    });
+    return () => unsubscribe();
   }, [router]);
 
-  const handleLogin = (e: FormEvent) => {
+  const handleLogin = async (e: FormEvent) => {
     e.preventDefault();
     setError('');
+    setIsLoading(true);
 
-    if (username === 'admin' && password === '0300Ali$') {
-      localStorage.setItem('isAuthenticated', 'true');
-      router.replace('/campaigns');
-    } else {
-      setError('Invalid username or password.');
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
+      // The onAuthStateChanged listener will handle the redirect.
+    } catch (err: any) {
+      if (err.code === 'auth/invalid-credential' || err.code === 'auth/invalid-email' || err.code === 'auth/wrong-password') {
+        setError('Invalid email or password.');
+      } else {
+        setError('An unexpected error occurred. Please try again.');
+        console.error(err);
+      }
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  if (isLoading) {
+  if (isCheckingAuth) {
     return (
         <div className="flex items-center justify-center min-h-screen bg-background">
             <Loader2 className="h-10 w-10 animate-spin text-primary" />
@@ -74,14 +87,14 @@ export default function LoginPage() {
                </Alert>
             )}
             <div className="space-y-2">
-              <Label htmlFor="username">Username</Label>
+              <Label htmlFor="email">Email</Label>
               <Input
-                id="username"
-                type="text"
-                placeholder="admin"
+                id="email"
+                type="email"
+                placeholder="admin@mailcannon.com"
                 required
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
               />
             </div>
             <div className="space-y-2">
@@ -95,7 +108,8 @@ export default function LoginPage() {
                 onChange={(e) => setPassword(e.target.value)}
               />
             </div>
-            <Button type="submit" className="w-full">
+            <Button type="submit" className="w-full" disabled={isLoading}>
+              {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Sign In
             </Button>
           </form>
