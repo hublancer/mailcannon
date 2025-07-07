@@ -1,5 +1,5 @@
 import { db } from '@/lib/firebase';
-import { collection, addDoc, onSnapshot, query } from 'firebase/firestore';
+import { collection, addDoc, onSnapshot, query, doc, updateDoc } from 'firebase/firestore';
 
 export interface SmtpAccount {
     id: string;
@@ -46,4 +46,15 @@ export const getSmtpAccounts = (userId: string, callback: (accounts: SmtpAccount
     });
 
     return unsubscribe;
+};
+
+export const updateSmtpAccountStatus = async (userId: string, accountId: string, status: 'Connected' | 'Disconnected' | 'Error') => {
+    if (!userId) throw new Error('User not logged in');
+    try {
+        const accountRef = doc(db, 'users', userId, 'smtpAccounts', accountId);
+        await updateDoc(accountRef, { status });
+    } catch (error) {
+        console.error("Error updating SMTP account status: ", error);
+        throw new Error("Failed to update SMTP account status.");
+    }
 };

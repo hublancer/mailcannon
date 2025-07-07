@@ -9,16 +9,20 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { PageHeader } from '@/components/page-header';
 import { AddSmtpAccountDialog } from '@/components/add-smtp-account-dialog';
+import { TestSmtpDialog } from '@/components/test-smtp-dialog';
 import { auth } from '@/lib/firebase';
 import { getSmtpAccounts, addSmtpAccount } from '@/services/smtp';
 import type { SmtpAccount } from '@/services/smtp';
 import { useToast } from '@/hooks/use-toast';
+import { sendTestEmail } from '@/app/actions/send-test-email';
 
 export default function SmtpAccountsPage() {
   const [accounts, setAccounts] = React.useState<SmtpAccount[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
   const [user, setUser] = React.useState(auth.currentUser);
   const [isAddDialogOpen, setIsAddDialogOpen] = React.useState(false);
+  const [isTestDialogOpen, setIsTestDialogOpen] = React.useState(false);
+  const [selectedAccountId, setSelectedAccountId] = React.useState<string | null>(null);
   const { toast } = useToast();
 
   React.useEffect(() => {
@@ -66,6 +70,37 @@ export default function SmtpAccountsPage() {
         console.error(error);
     }
   };
+
+  const handleSendTestEmail = async (email: string) => {
+    if (!selectedAccountId) return;
+    
+    toast({
+        title: "Testing Connection...",
+        description: `Sending a test email to ${email}.`,
+    });
+
+    const result = await sendTestEmail({ smtpAccountId: selectedAccountId, toEmail: email });
+
+    if (result.success) {
+        toast({
+            title: "Connection Successful!",
+            description: "The test email was sent successfully.",
+        });
+    } else {
+        toast({
+            variant: "destructive",
+            title: "Connection Failed",
+            description: result.error || "An unknown error occurred.",
+            duration: 9000,
+        });
+    }
+  };
+  
+  const openTestDialog = (accountId: string) => {
+      setSelectedAccountId(accountId);
+      setIsTestDialogOpen(true);
+  }
+
 
   return (
     <>
@@ -134,7 +169,9 @@ export default function SmtpAccountsPage() {
                           <DropdownMenuContent align="end">
                             <DropdownMenuLabel>Actions</DropdownMenuLabel>
                             <DropdownMenuItem>Edit</DropdownMenuItem>
-                            <DropdownMenuItem>Test Connection</DropdownMenuItem>
+                            <DropdownMenuItem onSelect={() => openTestDialog(account.id)}>
+                              Test Connection
+                            </DropdownMenuItem>
                             <DropdownMenuItem className="text-destructive">
                               Delete
                             </DropdownMenuItem>
@@ -152,6 +189,11 @@ export default function SmtpAccountsPage() {
         isOpen={isAddDialogOpen} 
         onOpenChange={setIsAddDialogOpen} 
         onAddAccount={handleAddAccount} 
+      />
+      <TestSmtpDialog
+        isOpen={isTestDialogOpen}
+        onOpenChange={setIsTestDialogOpen}
+        onSendTest={handleSendTestEmail}
       />
     </>
   );
