@@ -1,45 +1,42 @@
-import { MoreHorizontal, PowerIcon } from 'lucide-react';
+'use client';
+
+import * as React from 'react';
+import { MoreHorizontal, PowerIcon, PlusCircle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { PageHeader } from '@/components/page-header';
+import { AddSmtpAccountDialog } from '@/components/add-smtp-account-dialog';
 
-const accounts = [
+const initialAccounts = [
   { server: 'smtp.mailgun.org', username: 'postmaster@mg.example.com', port: 587, status: 'Connected' },
   { server: 'smtp.sendgrid.net', username: 'apikey', port: 465, status: 'Connected' },
   { server: 'email-smtp.us-east-1.amazonaws.com', username: 'AKIA...', port: 587, status: 'Disconnected' },
   { server: 'smtp.postmarkapp.com', username: 'server-token', port: 587, status: 'Error' },
 ];
 
+type SmtpAccount = typeof initialAccounts[0];
+
 export default function SmtpAccountsPage() {
+  const [accounts, setAccounts] = React.useState(initialAccounts);
+  const [isAddDialogOpen, setIsAddDialogOpen] = React.useState(false);
+
+  const handleAddAccount = (account: SmtpAccount) => {
+    setAccounts((prev) => [...prev, account]);
+  };
+
   return (
     <>
       <PageHeader
         title="SMTP Accounts"
         description="Configure and manage your SMTP server accounts for email distribution."
       >
-        <Button>Add Account</Button>
+        <Button onClick={() => setIsAddDialogOpen(true)}>
+          <PlusCircle className="mr-2" />
+          Add Account
+        </Button>
       </PageHeader>
       <Card>
         <CardHeader>
@@ -97,6 +94,11 @@ export default function SmtpAccountsPage() {
           </Table>
         </CardContent>
       </Card>
+      <AddSmtpAccountDialog 
+        isOpen={isAddDialogOpen} 
+        onOpenChange={setIsAddDialogOpen} 
+        onAddAccount={handleAddAccount} 
+      />
     </>
   );
 }

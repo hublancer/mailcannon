@@ -1,8 +1,14 @@
+'use client';
+
+import * as React from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { PageHeader } from '@/components/page-header';
+import { PlusCircle } from 'lucide-react';
+import { AddRecipientListDialog } from '@/components/add-recipient-list-dialog';
 
-const recipientLists = [
+
+const initialRecipientLists = [
   { name: 'Newsletter Subscribers', count: 15234, description: 'All users who subscribed to the weekly newsletter.' },
   { name: 'Active Customers (Last 90 Days)', count: 4892, description: 'Customers with a purchase in the last 3 months.' },
   { name: 'High-Value Clients', count: 350, description: 'Tier 1 and Tier 2 enterprise clients.' },
@@ -11,14 +17,26 @@ const recipientLists = [
   { name: 'Inactive Users', count: 22108, description: 'Users who have not logged in for over 6 months.' },
 ];
 
+type RecipientList = typeof initialRecipientLists[0];
+
 export default function RecipientsPage() {
+  const [recipientLists, setRecipientLists] = React.useState(initialRecipientLists);
+  const [isAddDialogOpen, setIsAddDialogOpen] = React.useState(false);
+
+  const handleAddList = (list: RecipientList) => {
+    setRecipientLists((prev) => [...prev, list]);
+  };
+
   return (
     <>
       <PageHeader
         title="Recipient Lists"
         description="Manage your audience by grouping them into lists."
       >
-        <Button>Add List</Button>
+        <Button onClick={() => setIsAddDialogOpen(true)}>
+          <PlusCircle className="mr-2" />
+          Add List
+        </Button>
       </PageHeader>
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         {recipientLists.map((list) => (
@@ -37,6 +55,11 @@ export default function RecipientsPage() {
           </Card>
         ))}
       </div>
+      <AddRecipientListDialog 
+        isOpen={isAddDialogOpen}
+        onOpenChange={setIsAddDialogOpen}
+        onAddList={handleAddList}
+      />
     </>
   );
 }

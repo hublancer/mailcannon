@@ -1,4 +1,5 @@
-import { MoreHorizontal } from 'lucide-react';
+import Link from 'next/link';
+import { MoreHorizontal, PlusCircle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -65,7 +66,12 @@ export default function CampaignsPage() {
         title="Campaigns"
         description="Create and manage your email campaigns."
       >
-        <Button>Create Campaign</Button>
+        <Button asChild>
+          <Link href="/campaigns/new">
+            <PlusCircle className="mr-2" />
+            Create Campaign
+          </Link>
+        </Button>
       </PageHeader>
       <Card>
         <CardHeader>
