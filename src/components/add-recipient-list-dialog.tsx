@@ -13,8 +13,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 const formSchema = z.object({
   name: z.string().min(1, 'List name is required'),
   description: z.string().optional(),
-  emails: z.string().refine((val) => val.split(',').every(email => z.string().email().safeParse(email.trim()).success), {
-    message: 'Please provide a valid, comma-separated list of emails.',
+  emails: z.string()
+    .refine(val => val.trim().length > 0, { message: 'Please enter at least one email.'})
+    .refine((val) => val.split(',').every(email => z.string().email().safeParse(email.trim()).success || email.trim() === ''), {
+      message: 'Please provide a valid, comma-separated list of emails.',
   }),
 });
 
@@ -23,7 +25,7 @@ type FormValues = z.infer<typeof formSchema>;
 interface AddRecipientListDialogProps {
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
-  onAddList: (list: { name: string; description: string; count: number }) => void;
+  onAddList: (list: { name: string; description: string; emails: string[] }) => void;
 }
 
 export function AddRecipientListDialog({ isOpen, onOpenChange, onAddList }: AddRecipientListDialogProps) {
@@ -37,8 +39,8 @@ export function AddRecipientListDialog({ isOpen, onOpenChange, onAddList }: AddR
   });
 
   const onSubmit = (values: FormValues) => {
-    const emailCount = values.emails.split(',').filter(e => e.trim()).length;
-    onAddList({ name: values.name, description: values.description || '', count: emailCount });
+    const emailArray = values.emails.split(',').map(e => e.trim()).filter(e => e);
+    onAddList({ name: values.name, description: values.description || '', emails: emailArray });
     form.reset();
     onOpenChange(false);
   };

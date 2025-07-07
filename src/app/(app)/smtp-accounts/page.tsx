@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { MoreHorizontal, PowerIcon, PlusCircle } from 'lucide-react';
+import { MoreHorizontal, PowerIcon, PlusCircle, Loader2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -9,22 +9,62 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { PageHeader } from '@/components/page-header';
 import { AddSmtpAccountDialog } from '@/components/add-smtp-account-dialog';
-
-const initialAccounts = [
-  { server: 'smtp.mailgun.org', username: 'postmaster@mg.example.com', port: 587, status: 'Connected' },
-  { server: 'smtp.sendgrid.net', username: 'apikey', port: 465, status: 'Connected' },
-  { server: 'email-smtp.us-east-1.amazonaws.com', username: 'AKIA...', port: 587, status: 'Disconnected' },
-  { server: 'smtp.postmarkapp.com', username: 'server-token', port: 587, status: 'Error' },
-];
-
-type SmtpAccount = typeof initialAccounts[0];
+import { auth } from '@/lib/firebase';
+import { getSmtpAccounts, addSmtpAccount } from '@/services/smtp';
+import type { SmtpAccount } from '@/services/smtp';
+import { useToast } from '@/hooks/use-toast';
 
 export default function SmtpAccountsPage() {
-  const [accounts, setAccounts] = React.useState(initialAccounts);
+  const [accounts, setAccounts] = React.useState<SmtpAccount[]>([]);
+  const [isLoading, setIsLoading] = React.useState(true);
+  const [user, setUser] = React.useState(auth.currentUser);
   const [isAddDialogOpen, setIsAddDialogOpen] = React.useState(false);
+  const { toast } = useToast();
 
-  const handleAddAccount = (account: SmtpAccount) => {
-    setAccounts((prev) => [...prev, account]);
+  React.useEffect(() => {
+    const unsubscribeAuth = auth.onAuthStateChanged((user) => {
+      setUser(user);
+    });
+    return () => unsubscribeAuth();
+  }, []);
+
+  React.useEffect(() => {
+    if (user) {
+      setIsLoading(true);
+      const unsubscribe = getSmtpAccounts(user.uid, (fetchedAccounts) => {
+        setAccounts(fetchedAccounts);
+        setIsLoading(false);
+      });
+      return () => unsubscribe();
+    } else {
+        setAccounts([]);
+        setIsLoading(false);
+    }
+  }, [user]);
+
+  const handleAddAccount = async (account: Omit<SmtpAccount, 'id' | 'status'> & { password?: string }) => {
+    if (!user) {
+        toast({
+            variant: "destructive",
+            title: "Error",
+            description: "You must be logged in to add an account.",
+        });
+        return;
+    }
+    try {
+        await addSmtpAccount(user.uid, account);
+        toast({
+            title: "Success!",
+            description: "SMTP Account added successfully.",
+        });
+    } catch (error) {
+        toast({
+            variant: "destructive",
+            title: "Error",
+            description: "Failed to add SMTP account.",
+        });
+        console.error(error);
+    }
   };
 
   return (
@@ -46,52 +86,66 @@ export default function SmtpAccountsPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Server</TableHead>
-                <TableHead>Username</TableHead>
-                <TableHead>Port</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>
-                  <span className="sr-only">Actions</span>
-                </TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {accounts.map((account) => (
-                <TableRow key={account.server}>
-                  <TableCell className="font-medium">{account.server}</TableCell>
-                  <TableCell className="font-mono text-xs">{account.username}</TableCell>
-                  <TableCell>{account.port}</TableCell>
-                  <TableCell>
-                    <Badge variant={account.status === 'Error' ? 'destructive' : account.status === 'Connected' ? 'default' : 'secondary'}>
-                      <PowerIcon className={`mr-2 h-3 w-3 ${account.status === 'Connected' ? 'text-green-400' : 'text-red-400'}`} />
-                      {account.status}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button aria-haspopup="true" size="icon" variant="ghost">
-                          <MoreHorizontal className="h-4 w-4" />
-                          <span className="sr-only">Toggle menu</span>
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                        <DropdownMenuItem>Edit</DropdownMenuItem>
-                        <DropdownMenuItem>Test Connection</DropdownMenuItem>
-                        <DropdownMenuItem className="text-destructive">
-                          Delete
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+          {isLoading ? (
+            <div className="flex justify-center items-center py-10">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            </div>
+          ) : accounts.length === 0 ? (
+            <div className="text-center py-10 border-2 border-dashed rounded-lg">
+              <h3 className="text-xl font-semibold">No SMTP Accounts Configured</h3>
+              <p className="text-muted-foreground mt-2">Get started by adding your first SMTP provider.</p>
+              <Button onClick={() => setIsAddDialogOpen(true)} className="mt-4">
+                Add Your First Account
+              </Button>
+            </div>
+          ) : (
+            <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Server</TableHead>
+                    <TableHead>Username</TableHead>
+                    <TableHead>Port</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>
+                      <span className="sr-only">Actions</span>
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {accounts.map((account) => (
+                    <TableRow key={account.id}>
+                      <TableCell className="font-medium">{account.server}</TableCell>
+                      <TableCell className="font-mono text-xs">{account.username}</TableCell>
+                      <TableCell>{account.port}</TableCell>
+                      <TableCell>
+                        <Badge variant={account.status === 'Error' ? 'destructive' : account.status === 'Connected' ? 'default' : 'secondary'}>
+                          <PowerIcon className={`mr-2 h-3 w-3 ${account.status === 'Connected' ? 'text-green-400' : 'text-red-400'}`} />
+                          {account.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button aria-haspopup="true" size="icon" variant="ghost">
+                              <MoreHorizontal className="h-4 w-4" />
+                              <span className="sr-only">Toggle menu</span>
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                            <DropdownMenuItem>Edit</DropdownMenuItem>
+                            <DropdownMenuItem>Test Connection</DropdownMenuItem>
+                            <DropdownMenuItem className="text-destructive">
+                              Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
       <AddSmtpAccountDialog 

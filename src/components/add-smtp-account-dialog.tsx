@@ -20,7 +20,7 @@ type FormValues = z.infer<typeof formSchema>;
 interface AddSmtpAccountDialogProps {
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
-  onAddAccount: (account: FormValues & { status: string }) => void;
+  onAddAccount: (account: FormValues) => void;
 }
 
 export function AddSmtpAccountDialog({ isOpen, onOpenChange, onAddAccount }: AddSmtpAccountDialogProps) {
@@ -35,7 +35,7 @@ export function AddSmtpAccountDialog({ isOpen, onOpenChange, onAddAccount }: Add
   });
 
   const onSubmit = (values: FormValues) => {
-    onAddAccount({ ...values, status: 'Disconnected' });
+    onAddAccount(values);
     form.reset();
     onOpenChange(false);
   };
