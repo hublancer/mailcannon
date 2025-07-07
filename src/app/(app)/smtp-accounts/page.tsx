@@ -10,9 +10,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { PageHeader } from '@/components/page-header';
 import { AddSmtpAccountDialog } from '@/components/add-smtp-account-dialog';
 import { TestSmtpDialog } from '@/components/test-smtp-dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { auth } from '@/lib/firebase';
-import { getSmtpAccounts, addSmtpAccount } from '@/services/smtp';
-import type { SmtpAccount } from '@/services/smtp';
+import { getSmtpAccounts, addSmtpAccount, updateSmtpAccount, deleteSmtpAccount, type SmtpAccount, type SmtpAccountData } from '@/services/smtp';
 import { useToast } from '@/hooks/use-toast';
 import { sendTestEmail } from '@/app/actions/send-test-email';
 
@@ -20,9 +20,17 @@ export default function SmtpAccountsPage() {
   const [accounts, setAccounts] = React.useState<SmtpAccount[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
   const [user, setUser] = React.useState(auth.currentUser);
-  const [isAddDialogOpen, setIsAddDialogOpen] = React.useState(false);
+  
+  // Dialog states
+  const [isAddEditDialogOpen, setIsAddEditDialogOpen] = React.useState(false);
   const [isTestDialogOpen, setIsTestDialogOpen] = React.useState(false);
-  const [selectedAccountId, setSelectedAccountId] = React.useState<string | null>(null);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = React.useState(false);
+
+  // State for selected accounts for actions
+  const [editingAccount, setEditingAccount] = React.useState<SmtpAccount | null>(null);
+  const [testingAccount, setTestingAccount] = React.useState<SmtpAccount | null>(null);
+  const [deletingAccount, setDeletingAccount] = React.useState<SmtpAccount | null>(null);
+
   const { toast } = useToast();
 
   React.useEffect(() => {
@@ -46,40 +54,69 @@ export default function SmtpAccountsPage() {
     }
   }, [user]);
 
-  const handleAddAccount = async (account: Omit<SmtpAccount, 'id' | 'status'> & { password?: string }) => {
+  const openAddDialog = () => {
+    setEditingAccount(null);
+    setIsAddEditDialogOpen(true);
+  }
+
+  const openEditDialog = (account: SmtpAccount) => {
+    setEditingAccount(account);
+    setIsAddEditDialogOpen(true);
+  }
+
+  const openTestDialog = (account: SmtpAccount) => {
+    setTestingAccount(account);
+    setIsTestDialogOpen(true);
+  }
+  
+  const openDeleteDialog = (account: SmtpAccount) => {
+    setDeletingAccount(account);
+    setIsDeleteDialogOpen(true);
+  }
+
+  const handleSaveAccount = async (accountData: SmtpAccountData, accountId?: string) => {
     if (!user) {
-        toast({
-            variant: "destructive",
-            title: "Error",
-            description: "You must be logged in to add an account.",
-        });
+        toast({ variant: "destructive", title: "Error", description: "You must be logged in." });
         return;
     }
     try {
-        await addSmtpAccount(user.uid, account);
-        toast({
-            title: "Success!",
-            description: "SMTP Account added successfully.",
-        });
+        if (accountId) { // Editing existing account
+            await updateSmtpAccount(user.uid, accountId, accountData);
+            toast({ title: "Success!", description: "SMTP Account updated successfully." });
+        } else { // Adding new account
+            await addSmtpAccount(user.uid, accountData);
+            toast({ title: "Success!", description: "SMTP Account added successfully." });
+        }
     } catch (error) {
-        toast({
-            variant: "destructive",
-            title: "Error",
-            description: "Failed to add SMTP account.",
-        });
-        console.error(error);
+        toast({ variant: "destructive", title: "Error", description: (error as Error).message });
     }
   };
 
+  const handleDeleteAccount = async () => {
+    if (!user || !deletingAccount) {
+        toast({ variant: "destructive", title: "Error", description: "Could not delete account." });
+        return;
+    }
+    try {
+        await deleteSmtpAccount(user.uid, deletingAccount.id);
+        toast({ title: "Success!", description: `Account ${deletingAccount.server} deleted.` });
+    } catch (error) {
+        toast({ variant: "destructive", title: "Error", description: (error as Error).message });
+    } finally {
+        setIsDeleteDialogOpen(false);
+        setDeletingAccount(null);
+    }
+  }
+
   const handleSendTestEmail = async (email: string) => {
-    if (!selectedAccountId) return;
+    if (!testingAccount) return;
     
     toast({
         title: "Testing Connection...",
         description: `Sending a test email to ${email}.`,
     });
 
-    const result = await sendTestEmail({ smtpAccountId: selectedAccountId, toEmail: email });
+    const result = await sendTestEmail({ smtpAccountId: testingAccount.id, toEmail: email });
 
     if (result.success) {
         toast({
@@ -95,12 +132,6 @@ export default function SmtpAccountsPage() {
         });
     }
   };
-  
-  const openTestDialog = (accountId: string) => {
-      setSelectedAccountId(accountId);
-      setIsTestDialogOpen(true);
-  }
-
 
   return (
     <>
@@ -108,7 +139,7 @@ export default function SmtpAccountsPage() {
         title="SMTP Accounts"
         description="Configure and manage your SMTP server accounts for email distribution."
       >
-        <Button onClick={() => setIsAddDialogOpen(true)}>
+        <Button onClick={openAddDialog}>
           <PlusCircle className="mr-2" />
           Add Account
         </Button>
@@ -129,7 +160,7 @@ export default function SmtpAccountsPage() {
             <div className="text-center py-10 border-2 border-dashed rounded-lg">
               <h3 className="text-xl font-semibold">No SMTP Accounts Configured</h3>
               <p className="text-muted-foreground mt-2">Get started by adding your first SMTP provider.</p>
-              <Button onClick={() => setIsAddDialogOpen(true)} className="mt-4">
+              <Button onClick={openAddDialog} className="mt-4">
                 Add Your First Account
               </Button>
             </div>
@@ -140,6 +171,7 @@ export default function SmtpAccountsPage() {
                     <TableHead>Server</TableHead>
                     <TableHead>Username</TableHead>
                     <TableHead>Port</TableHead>
+                    <TableHead>SSL</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>
                       <span className="sr-only">Actions</span>
@@ -152,6 +184,7 @@ export default function SmtpAccountsPage() {
                       <TableCell className="font-medium">{account.server}</TableCell>
                       <TableCell className="font-mono text-xs">{account.username}</TableCell>
                       <TableCell>{account.port}</TableCell>
+                      <TableCell>{account.secure ? 'Yes' : 'No'}</TableCell>
                       <TableCell>
                         <Badge variant={account.status === 'Error' ? 'destructive' : account.status === 'Connected' ? 'default' : 'secondary'}>
                           <PowerIcon className={`mr-2 h-3 w-3 ${account.status === 'Connected' ? 'text-green-400' : 'text-red-400'}`} />
@@ -168,11 +201,11 @@ export default function SmtpAccountsPage() {
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
                             <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                            <DropdownMenuItem>Edit</DropdownMenuItem>
-                            <DropdownMenuItem onSelect={() => openTestDialog(account.id)}>
+                            <DropdownMenuItem onSelect={() => openEditDialog(account)}>Edit</DropdownMenuItem>
+                            <DropdownMenuItem onSelect={() => openTestDialog(account)}>
                               Test Connection
                             </DropdownMenuItem>
-                            <DropdownMenuItem className="text-destructive">
+                            <DropdownMenuItem className="text-destructive" onSelect={() => openDeleteDialog(account)}>
                               Delete
                             </DropdownMenuItem>
                           </DropdownMenuContent>
@@ -185,16 +218,36 @@ export default function SmtpAccountsPage() {
           )}
         </CardContent>
       </Card>
+      
+      {/* Dialogs */}
       <AddSmtpAccountDialog 
-        isOpen={isAddDialogOpen} 
-        onOpenChange={setIsAddDialogOpen} 
-        onAddAccount={handleAddAccount} 
+        isOpen={isAddEditDialogOpen} 
+        onOpenChange={setIsAddEditDialogOpen} 
+        onSaveAccount={handleSaveAccount} 
+        account={editingAccount}
       />
       <TestSmtpDialog
         isOpen={isTestDialogOpen}
         onOpenChange={setIsTestDialogOpen}
         onSendTest={handleSendTestEmail}
       />
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent>
+            <AlertDialogHeader>
+                <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                <AlertDialogDescription>
+                    This action cannot be undone. This will permanently delete the SMTP account
+                    for <span className="font-semibold">{deletingAccount?.server}</span>.
+                </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={handleDeleteAccount} className="text-destructive-foreground bg-destructive hover:bg-destructive/90">
+                    Yes, delete account
+                </AlertDialogAction>
+            </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }

@@ -29,7 +29,7 @@ export async function sendTestEmail({ smtpAccountId, toEmail }: SendTestEmailPar
         const transporter = nodemailer.createTransport({
             host: smtpConfig.server,
             port: smtpConfig.port,
-            secure: smtpConfig.port === 465, // true for 465, false for other ports
+            secure: smtpConfig.secure, // Use the 'secure' flag from the database
             auth: {
                 user: smtpConfig.username,
                 pass: smtpConfig.password,
