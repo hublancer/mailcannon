@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
   SidebarProvider,
@@ -24,6 +24,8 @@ import {
   Settings,
   CircleUser,
   PanelLeft,
+  LogOut,
+  Loader2,
 } from 'lucide-react';
 import { MailCannonIcon } from '@/components/icons';
 import { Button } from '@/components/ui/button';
@@ -42,6 +44,31 @@ const navItems = [
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const isMobile = useIsMobile();
+  const router = useRouter();
+  const [isCheckingAuth, setIsCheckingAuth] = React.useState(true);
+
+  React.useEffect(() => {
+    // This check only runs on the client-side
+    const isAuthenticated = localStorage.getItem('isAuthenticated');
+    if (isAuthenticated !== 'true') {
+      router.replace('/login');
+    } else {
+      setIsCheckingAuth(false);
+    }
+  }, [router, pathname]);
+
+  const handleLogout = () => {
+    localStorage.removeItem('isAuthenticated');
+    router.push('/login');
+  };
+
+  if (isCheckingAuth) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-background">
+        <Loader2 className="h-10 w-10 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   const sidebarContent = (
     <>
@@ -85,6 +112,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                     <CircleUser />
                     <span>User Profile</span>
                 </Link>
+             </SidebarMenuButton>
+          </SidebarMenuItem>
+          <SidebarMenuItem>
+             <SidebarMenuButton onClick={handleLogout} tooltip="Logout">
+                <LogOut />
+                <span>Logout</span>
              </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
@@ -147,6 +180,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                                 </Link>
                             </SidebarMenuButton>
                           </SidebarMenuItem>
+                          <SidebarMenuItem>
+                            <SidebarMenuButton onClick={handleLogout} tooltip="Logout">
+                                <LogOut />
+                                <span>Logout</span>
+                            </SidebarMenuButton>
+                           </SidebarMenuItem>
                           </SidebarMenu>
                       </SidebarFooter>
                   </div>
