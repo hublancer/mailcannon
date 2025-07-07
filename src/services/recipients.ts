@@ -1,5 +1,5 @@
 import { db } from '@/lib/firebase';
-import { collection, addDoc, onSnapshot, query, serverTimestamp, writeBatch } from 'firebase/firestore';
+import { collection, addDoc, onSnapshot, query, serverTimestamp, writeBatch, doc } from 'firebase/firestore';
 
 export interface RecipientList {
     id: string;
@@ -11,33 +11,34 @@ export interface RecipientList {
 export const addRecipientList = async (userId: string, listData: { name: string, description: string, emails: string[] }) => {
     if (!userId) throw new Error('User not logged in');
 
+    const { name, description, emails } = listData;
+    const batch = writeBatch(db);
+
     try {
-        const { name, description, emails } = listData;
-        
-        // In a real production app, you would not store large email lists this way.
-        // You'd use a subcollection and batch writes. For this app, we'll
-        // just create the list document and assume email handling is done elsewhere.
+        const listCollectionRef = collection(db, 'users', userId, 'recipientLists');
+        const newListRef = doc(listCollectionRef); // Create a reference with a new ID
+
+        // Set the main list document
         const listDoc = {
             name,
             description,
             count: emails.length,
             createdAt: serverTimestamp(),
         };
-
-        const docRef = await addDoc(collection(db, 'users', userId, 'recipientLists'), listDoc);
+        batch.set(newListRef, listDoc);
         
-        // Example of how you would handle subcollections with batching:
-        /*
-        const batch = writeBatch(db);
-        const emailsCollection = collection(db, 'users', userId, 'recipientLists', docRef.id, 'emails');
+        // Add emails to a 'recipients' subcollection
+        const recipientsCollectionRef = collection(db, 'users', userId, 'recipientLists', newListRef.id, 'recipients');
         emails.forEach(email => {
-            const emailDocRef = doc(emailsCollection);
-            batch.set(emailDocRef, { email });
+            if(email && email.trim() !== '') {
+                const emailDocRef = doc(recipientsCollectionRef);
+                batch.set(emailDocRef, { email: email.trim(), addedAt: serverTimestamp() });
+            }
         });
-        await batch.commit();
-        */
 
-        return docRef.id;
+        await batch.commit();
+        return newListRef.id;
+
     } catch (error) {
         console.error("Error adding recipient list: ", error);
         throw new Error("Failed to create recipient list.");

@@ -24,6 +24,7 @@ import { auth } from '@/lib/firebase';
 import { getSmtpAccounts, type SmtpAccount } from '@/services/smtp';
 import { getRecipientLists, type RecipientList } from '@/services/recipients';
 import { addCampaign } from '@/services/campaigns';
+import { AIGeneratorDialog } from '@/components/ai-generator-dialog';
 
 const formSchema = z.object({
   campaignName: z.string().min(3, 'Campaign name must be at least 3 characters.'),
@@ -56,6 +57,7 @@ export default function NewCampaignPage() {
   const [recipientLists, setRecipientLists] = React.useState<RecipientList[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [isAiDialogOpen, setIsAiDialogOpen] = React.useState(false);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -114,7 +116,7 @@ export default function NewCampaignPage() {
         });
         toast({
             title: "Campaign Created!",
-            description: "Your new campaign has been successfully saved as a draft.",
+            description: "Your new campaign has been successfully saved.",
         });
         router.push('/campaigns');
     } catch (error) {
@@ -200,11 +202,9 @@ export default function NewCampaignPage() {
                                     </FormItem>
                                 )}
                                 />
-                            <Button variant="outline" className="mt-4" asChild>
-                                <Link href="/ai-generator" target="_blank">
-                                    <Wand2 className="mr-2" />
-                                    Generate with AI
-                                </Link>
+                            <Button variant="outline" type="button" className="mt-4" onClick={() => setIsAiDialogOpen(true)}>
+                                <Wand2 className="mr-2" />
+                                Generate with AI
                             </Button>
                         </CardContent>
                     </Card>
@@ -384,6 +384,18 @@ export default function NewCampaignPage() {
             </div>
         </form>
       </Form>
+      <AIGeneratorDialog 
+        isOpen={isAiDialogOpen}
+        onOpenChange={setIsAiDialogOpen}
+        onContentSelect={({ subject, body }) => {
+            form.setValue('emailSubject', subject, { shouldValidate: true });
+            form.setValue('emailBody', body, { shouldValidate: true });
+            toast({
+                title: "Content Applied!",
+                description: "The AI-generated subject and body have been added to your campaign.",
+            });
+        }}
+      />
     </>
   );
 }

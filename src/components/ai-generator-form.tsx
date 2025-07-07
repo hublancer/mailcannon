@@ -33,6 +33,7 @@ import {
   AccordionTrigger,
 } from '@/components/ui/accordion';
 import type { GenerateEmailContentOutput } from '@/ai/flows/generate-email-content';
+import { ScrollArea } from './ui/scroll-area';
 
 const formSchema = z.object({
   campaignName: z.string().min(3, {
@@ -54,9 +55,10 @@ type FormValues = z.infer<typeof formSchema>;
 
 interface AIGeneratorFormProps {
   generate: (input: FormValues) => Promise<GenerateEmailContentOutput | undefined>;
+  onContentSelect?: (content: { subject: string; body: string }) => void;
 }
 
-export function AIGeneratorForm({ generate }: AIGeneratorFormProps) {
+export function AIGeneratorForm({ generate, onContentSelect }: AIGeneratorFormProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [generatedContent, setGeneratedContent] = useState<GenerateEmailContentOutput | null>(null);
 
@@ -87,7 +89,7 @@ export function AIGeneratorForm({ generate }: AIGeneratorFormProps) {
   };
 
   return (
-    <div className="grid gap-8 lg:grid-cols-2">
+    <div className="grid gap-8 lg:grid-cols-2 h-full">
       <Card>
         <CardHeader>
           <CardTitle>Content Parameters</CardTitle>
@@ -193,11 +195,11 @@ export function AIGeneratorForm({ generate }: AIGeneratorFormProps) {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="h-full flex flex-col">
         <CardHeader>
           <CardTitle>Generated Content</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="flex-1 overflow-y-auto">
           {isLoading && (
             <div className="flex flex-col items-center justify-center h-full space-y-4">
                 <Loader2 className="h-10 w-10 animate-spin text-primary" />
@@ -212,18 +214,25 @@ export function AIGeneratorForm({ generate }: AIGeneratorFormProps) {
             </div>
           )}
            {generatedContent && (
-            <Accordion type="single" collapsible className="w-full">
-              {generatedContent.emailVersions.map((version, index) => (
-                <AccordionItem value={`item-${index}`} key={index}>
-                  <AccordionTrigger>Version {index + 1}: {version.subject}</AccordionTrigger>
-                  <AccordionContent>
-                    <div className="prose prose-sm dark:prose-invert max-w-none whitespace-pre-wrap p-4 bg-secondary rounded-md">
-                        {version.body}
-                    </div>
-                  </AccordionContent>
-                </AccordionItem>
-              ))}
-            </Accordion>
+            <ScrollArea className="h-full pr-4">
+              <Accordion type="single" collapsible className="w-full">
+                {generatedContent.emailVersions.map((version, index) => (
+                  <AccordionItem value={`item-${index}`} key={index}>
+                    <AccordionTrigger>Version {index + 1}: {version.subject}</AccordionTrigger>
+                    <AccordionContent>
+                      <div className="prose prose-sm dark:prose-invert max-w-none whitespace-pre-wrap p-4 bg-secondary rounded-md mb-4">
+                          {version.body}
+                      </div>
+                      {onContentSelect && (
+                          <Button onClick={() => onContentSelect(version)}>
+                              Use This Content
+                          </Button>
+                      )}
+                    </AccordionContent>
+                  </AccordionItem>
+                ))}
+              </Accordion>
+            </ScrollArea>
           )}
         </CardContent>
       </Card>

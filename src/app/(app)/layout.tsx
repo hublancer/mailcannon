@@ -18,7 +18,6 @@ import {
   Send,
   Users,
   Server,
-  Sparkles,
   LineChart,
   FileText,
   Settings,
@@ -38,7 +37,6 @@ const navItems = [
   { href: '/campaigns', icon: Send, label: 'Campaigns' },
   { href: '/recipients', icon: Users, label: 'Recipients' },
   { href: '/smtp-accounts', icon: Server, label: 'SMTP Accounts' },
-  { href: '/ai-generator', icon: Sparkles, label: 'AI Generator' },
   { href: '/tracking', icon: LineChart, label: 'Tracking' },
   { href: '/logs', icon: FileText, label: 'Logs' },
 ];

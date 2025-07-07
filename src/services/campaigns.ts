@@ -1,5 +1,5 @@
 import { db } from '@/lib/firebase';
-import { collection, addDoc, onSnapshot, query, orderBy, serverTimestamp, Timestamp } from 'firebase/firestore';
+import { collection, addDoc, onSnapshot, query, orderBy, serverTimestamp, Timestamp, doc, deleteDoc } from 'firebase/firestore';
 
 export interface Campaign {
   id: string;
@@ -25,7 +25,7 @@ export const addCampaign = async (userId: string, campaignData: CampaignData) =>
     try {
         const docRef = await addDoc(collection(db, 'users', userId, 'campaigns'), {
             ...campaignData,
-            status: 'Draft',
+            status: campaignData.scheduleSend && campaignData.scheduledAt ? 'Scheduled' : 'Draft',
             createdAt: serverTimestamp(),
             // Ensure scheduledAt is a Timestamp or null
             scheduledAt: campaignData.scheduledAt ? Timestamp.fromDate(campaignData.scheduledAt) : null,
@@ -63,3 +63,13 @@ export const getCampaigns = (userId: string, callback: (campaigns: Campaign[]) =
 
     return unsubscribe;
 };
+
+export const deleteCampaign = async (userId: string, campaignId: string) => {
+    if (!userId) throw new Error('User not logged in');
+    try {
+        await deleteDoc(doc(db, 'users', userId, 'campaigns', campaignId));
+    } catch (error) {
+        console.error("Error deleting campaign: ", error);
+        throw new Error("Failed to delete campaign.");
+    }
+}
