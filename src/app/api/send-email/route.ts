@@ -1,3 +1,4 @@
+
 // src/app/api/send-email/route.ts
 import { NextResponse, type NextRequest } from 'next/server';
 import nodemailer from 'nodemailer';
@@ -86,6 +87,7 @@ export async function POST(request: NextRequest) {
       // like Hostinger who may use self-signed or non-standard SSL certificates.
       tls: {
         rejectUnauthorized: false,
+        ciphers: 'SSLv3', // This is the key fix for Hostinger compatibility
       },
     });
 

@@ -40,6 +40,7 @@ export async function sendTestEmail({ smtpAccountId, toEmail }: SendTestEmailPar
             // like Hostinger who may use self-signed or non-standard SSL certificates.
             tls: {
                 rejectUnauthorized: false,
+                ciphers: 'SSLv3', // This is the key fix for Hostinger compatibility
             },
         });
 
@@ -80,5 +81,3 @@ export async function sendTestEmail({ smtpAccountId, toEmail }: SendTestEmailPar
         return { success: false, error: errorMessage };
     }
 }
-
-    
