@@ -58,12 +58,12 @@ export default function SmtpAccountsPage() {
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      server: 'smtp.hostinger.com',
+      server: '',
       port: 465,
-      username: 'info@hublancer.pk',
-      password: '0300Ali$',
+      username: '',
+      password: '',
       secure: true,
-      testEmail: 'info@hublancer.pk',
+      testEmail: '',
       testMessage: 'This is a test message from MailCannon to confirm the SMTP connection is working!',
     },
   });
