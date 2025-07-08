@@ -1,5 +1,6 @@
+
 import { db } from '@/lib/firebase';
-import { collection, addDoc, onSnapshot, query, serverTimestamp, writeBatch, doc } from 'firebase/firestore';
+import { collection, addDoc, onSnapshot, query, serverTimestamp, writeBatch, doc, getDocs } from 'firebase/firestore';
 
 export interface RecipientList {
     id: string;
@@ -18,7 +19,6 @@ export const addRecipientList = async (userId: string, listData: { name: string,
         const listCollectionRef = collection(db, 'users', userId, 'recipientLists');
         const newListRef = doc(listCollectionRef); // Create a reference with a new ID
 
-        // Set the main list document
         const listDoc = {
             name,
             description,
@@ -27,7 +27,6 @@ export const addRecipientList = async (userId: string, listData: { name: string,
         };
         batch.set(newListRef, listDoc);
         
-        // Add emails to a 'recipients' subcollection
         const recipientsCollectionRef = collection(db, 'users', userId, 'recipientLists', newListRef.id, 'recipients');
         emails.forEach(email => {
             if(email && email.trim() !== '') {
@@ -62,3 +61,15 @@ export const getRecipientLists = (userId: string, callback: (lists: RecipientLis
 
     return unsubscribe;
 };
+
+export const getRecipientsForList = async (userId: string, listId: string): Promise<string[]> => {
+    if (!userId || !listId) return [];
+    try {
+        const recipientsColRef = collection(db, 'users', userId, 'recipientLists', listId, 'recipients');
+        const snapshot = await getDocs(recipientsColRef);
+        return snapshot.docs.map(doc => doc.data().email as string);
+    } catch (error) {
+        console.error("Error fetching recipients: ", error);
+        throw new Error("Failed to fetch recipients.");
+    }
+}

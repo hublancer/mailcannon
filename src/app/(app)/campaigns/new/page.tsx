@@ -1,3 +1,4 @@
+
 'use client';
 
 import * as React from 'react';
@@ -35,7 +36,6 @@ const formSchema = z.object({
   scheduleSend: z.boolean().default(false),
   scheduledAtDate: z.date().optional(),
   scheduledAtTime: z.string().optional(),
-  delay: z.coerce.number().int().min(0).default(1000),
   speedLimit: z.coerce.number().int().min(0).default(0),
 }).refine(data => {
     if (data.scheduleSend) {
@@ -66,7 +66,6 @@ export default function NewCampaignPage() {
       emailSubject: '',
       emailBody: '',
       scheduleSend: false,
-      delay: 1000,
       speedLimit: 0,
     },
   });
@@ -83,8 +82,6 @@ export default function NewCampaignPage() {
         setIsLoading(true);
         const unsubSmtp = getSmtpAccounts(user.uid, setSmtpAccounts);
         const unsubRecipients = getRecipientLists(user.uid, setRecipientLists);
-        // This is optimistic. A better approach would be to track loading states for each fetch.
-        // For simplicity, we'll set loading to false after subscriptions are initiated.
         setIsLoading(false);
         return () => {
             unsubSmtp();
@@ -343,26 +340,12 @@ export default function NewCampaignPage() {
                                         />
                                 </div>
                             )}
-                            <FormField
-                                control={form.control}
-                                name="delay"
-                                render={({ field }) => (
-                                    <FormItem>
-                                    <FormLabel>Delay Between Sends</FormLabel>
-                                    <FormControl>
-                                        <Input type="number" placeholder="1000" {...field} />
-                                    </FormControl>
-                                    <FormDescription>In milliseconds (e.g., 1000ms = 1 second).</FormDescription>
-                                    <FormMessage />
-                                    </FormItem>
-                                )}
-                                />
                              <FormField
                                 control={form.control}
                                 name="speedLimit"
                                 render={({ field }) => (
                                     <FormItem>
-                                    <FormLabel>Speed Limit (Optional)</FormLabel>
+                                    <FormLabel>Speed Limit</FormLabel>
                                     <FormControl>
                                         <Input type="number" placeholder="0" {...field} />
                                     </FormControl>
