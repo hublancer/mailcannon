@@ -2,10 +2,10 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    // This rule allows authenticated users to read and write only their own data.
-    // All other access is denied by default.
-    match /users/{userId}/{documents=**} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+    // Users can only read, write, and delete their own data.
+    // This rule covers all subcollections like smtpAccounts, campaigns, recipientLists, etc.
+    match /users/{userId}/{document=**} {
+      allow read, write, delete: if request.auth != null && request.auth.uid == userId;
     }
   }
 }
