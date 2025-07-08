@@ -12,18 +12,33 @@ import { Badge } from '@/components/ui/badge';
 import { getAllUsers, UserProfile } from '@/services/users';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { useToast } from '@/hooks/use-toast';
 
 export default function AdminUsersPage() {
     const [users, setUsers] = React.useState<UserProfile[]>([]);
     const [isLoading, setIsLoading] = React.useState(true);
+    const { toast } = useToast();
 
     React.useEffect(() => {
-        const unsubscribe = getAllUsers((fetchedUsers) => {
-            setUsers(fetchedUsers);
-            setIsLoading(false);
-        });
-        return () => unsubscribe();
-    }, []);
+        const fetchUsers = async () => {
+            setIsLoading(true);
+            try {
+                const fetchedUsers = await getAllUsers();
+                setUsers(fetchedUsers);
+            } catch (error) {
+                console.error("Error fetching users:", error);
+                toast({
+                    variant: 'destructive',
+                    title: 'Error',
+                    description: 'Could not fetch user data. You may not have the required permissions.'
+                });
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        fetchUsers();
+    }, [toast]);
 
     const getStatusBadgeVariant = (status?: string) => {
         switch (status) {

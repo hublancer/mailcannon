@@ -13,11 +13,15 @@ export default function AdminDashboardPage() {
     const [payments, setPayments] = React.useState<Payment[]>([]);
 
     React.useEffect(() => {
-        const unsubUsers = getAllUsers(setUsers);
+        const fetchUsers = async () => {
+            const fetchedUsers = await getAllUsers();
+            setUsers(fetchedUsers);
+        };
+        
+        fetchUsers();
         const unsubPayments = getPayments(setPayments);
 
         return () => {
-            unsubUsers();
             unsubPayments();
         };
     }, []);

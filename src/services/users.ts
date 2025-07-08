@@ -1,7 +1,6 @@
 
 import { db } from '@/lib/firebase';
-import { collection, doc, onSnapshot, query, serverTimestamp, setDoc, Timestamp, updateDoc } from 'firebase/firestore';
-import { getDoc } from 'firebase/firestore';
+import { collection, doc, onSnapshot, query, serverTimestamp, setDoc, Timestamp, updateDoc, getDocs } from 'firebase/firestore';
 
 export interface UserProfile {
   uid: string;
@@ -39,28 +38,26 @@ export const createUserProfile = async (uid: string, email: string, role: 'admin
 };
 
 // Function for admin to get all users
-export const getAllUsers = (callback: (users: UserProfile[]) => void) => {
+export const getAllUsers = async (): Promise<UserProfile[]> => {
     const usersCollection = collection(db, 'users');
     const q = query(usersCollection);
+    const querySnapshot = await getDocs(q);
 
-    const unsubscribe = onSnapshot(q, (querySnapshot) => {
-        const users: UserProfile[] = [];
-        querySnapshot.forEach((doc) => {
-            const data = doc.data();
-            users.push({
-                uid: doc.id,
-                ...data,
-                createdAt: (data.createdAt as Timestamp)?.toDate() || new Date(),
-                subscription: data.subscription ? {
-                    ...data.subscription,
-                    startDate: (data.subscription.startDate as Timestamp)?.toDate(),
-                    endDate: (data.subscription.endDate as Timestamp)?.toDate(),
-                } : undefined,
-            } as UserProfile);
-        });
-        callback(users);
+    const users: UserProfile[] = [];
+    querySnapshot.forEach((doc) => {
+        const data = doc.data();
+        users.push({
+            uid: doc.id,
+            ...data,
+            createdAt: (data.createdAt as Timestamp)?.toDate() || new Date(),
+            subscription: data.subscription ? {
+                ...data.subscription,
+                startDate: (data.subscription.startDate as Timestamp)?.toDate(),
+                endDate: (data.subscription.endDate as Timestamp)?.toDate(),
+            } : undefined,
+        } as UserProfile);
     });
-    return unsubscribe;
+    return users;
 };
 
 
