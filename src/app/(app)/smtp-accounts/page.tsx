@@ -19,11 +19,14 @@ import { PageHeader } from '@/components/page-header';
 import { AddSmtpAccountDialog } from '@/components/add-smtp-account-dialog';
 import { TestSmtpDialog } from '@/components/test-smtp-dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { auth } from '@/lib/firebase';
+import { auth, db } from '@/lib/firebase';
 import { getSmtpAccounts, addSmtpAccount, updateSmtpAccount, deleteSmtpAccount, type SmtpAccount, type SmtpAccountData } from '@/services/smtp';
 import { useToast } from '@/hooks/use-toast';
 import { sendTestEmail } from '@/app/actions/send-test-email';
 import { testSmtpConnection } from '@/app/actions/test-smtp-connection';
+import { doc, onSnapshot } from 'firebase/firestore';
+import { UserProfile } from '@/services/users';
+import Link from 'next/link';
 
 const formSchema = z.object({
   server: z.string().min(1, 'Server is required'),
@@ -41,6 +44,7 @@ export default function SmtpAccountsPage() {
   const [accounts, setAccounts] = React.useState<SmtpAccount[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
   const [user, setUser] = React.useState(auth.currentUser);
+  const [userProfile, setUserProfile] = React.useState<UserProfile | null>(null);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   
   // Dialog states
@@ -77,17 +81,30 @@ export default function SmtpAccountsPage() {
 
   React.useEffect(() => {
     if (user) {
-      setIsLoading(true);
-      const unsubscribe = getSmtpAccounts(user.uid, (fetchedAccounts) => {
-        setAccounts(fetchedAccounts);
-        setIsLoading(false);
-      });
-      return () => unsubscribe();
+        setIsLoading(true);
+        const unsubAccounts = getSmtpAccounts(user.uid, (fetchedAccounts) => {
+            setAccounts(fetchedAccounts);
+            setIsLoading(false);
+        });
+
+        const unsubProfile = onSnapshot(doc(db, 'users', user.uid), (doc) => {
+            if(doc.exists()) {
+                setUserProfile(doc.data() as UserProfile);
+            }
+        });
+
+        return () => {
+            unsubAccounts();
+            unsubProfile();
+        }
     } else {
         setAccounts([]);
         setIsLoading(false);
     }
   }, [user]);
+
+  const smtpAccountLimit = userProfile?.subscription?.planName === '1-Day Trial' ? 1 : userProfile?.subscription?.planName === 'Basic' ? 2 : 999;
+  const canAddAccount = accounts.length < smtpAccountLimit;
 
   const openEditDialog = (account: SmtpAccount) => {
     setEditingAccount(account);
@@ -164,6 +181,11 @@ export default function SmtpAccountsPage() {
         toast({ variant: "destructive", title: "Error", description: "You must be logged in." });
         return;
     }
+    if (!canAddAccount) {
+        toast({ variant: "destructive", title: "Limit Reached", description: "You have reached your SMTP account limit. Please upgrade your plan." });
+        return;
+    }
+
     setIsSubmitting(true);
     
     toast({
@@ -216,7 +238,7 @@ export default function SmtpAccountsPage() {
         <CardHeader>
           <CardTitle>Server Accounts</CardTitle>
           <CardDescription>
-            Manage your connections to third-party SMTP providers.
+            You can add up to {smtpAccountLimit} SMTP accounts. ({accounts.length}/{smtpAccountLimit} used)
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -292,120 +314,130 @@ export default function SmtpAccountsPage() {
             </CardDescription>
         </CardHeader>
         <CardContent>
-            <Form {...form}>
-                <form onSubmit={form.handleSubmit(handleTestAndSaveSubmit)} className="space-y-4">
-                    <FormField
-                    control={form.control}
-                    name="server"
-                    render={({ field }) => (
-                        <FormItem>
-                        <FormLabel>Server</FormLabel>
-                        <FormControl>
-                            <Input placeholder="smtp.example.com" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                        </FormItem>
-                    )}
-                    />
-                    <div className="grid grid-cols-3 gap-4">
-                    <FormField
+            {!canAddAccount ? (
+                <div className="text-center py-10 border-2 border-dashed rounded-lg bg-red-50/50">
+                    <h3 className="text-xl font-semibold text-destructive">SMTP Account Limit Reached</h3>
+                    <p className="text-muted-foreground mt-2">You have reached the maximum number of SMTP accounts for your plan.</p>
+                    <Button asChild className="mt-4">
+                        <Link href="/billing">Upgrade Your Plan</Link>
+                    </Button>
+                </div>
+            ) : (
+                <Form {...form}>
+                    <form onSubmit={form.handleSubmit(handleTestAndSaveSubmit)} className="space-y-4">
+                        <FormField
                         control={form.control}
-                        name="port"
+                        name="server"
                         render={({ field }) => (
-                        <FormItem className="col-span-1">
-                            <FormLabel>Port</FormLabel>
+                            <FormItem>
+                            <FormLabel>Server</FormLabel>
                             <FormControl>
-                            <Input type="number" placeholder="465" {...field} />
+                                <Input placeholder="smtp.example.com" {...field} />
                             </FormControl>
                             <FormMessage />
-                        </FormItem>
+                            </FormItem>
                         )}
-                    />
-                    <FormField
+                        />
+                        <div className="grid grid-cols-3 gap-4">
+                        <FormField
+                            control={form.control}
+                            name="port"
+                            render={({ field }) => (
+                            <FormItem className="col-span-1">
+                                <FormLabel>Port</FormLabel>
+                                <FormControl>
+                                <Input type="number" placeholder="465" {...field} />
+                                </FormControl>
+                                <FormMessage />
+                            </FormItem>
+                            )}
+                        />
+                        <FormField
+                            control={form.control}
+                            name="secure"
+                            render={({ field }) => (
+                            <FormItem className="col-span-2 flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm mt-2">
+                                <div className="space-y-0.5">
+                                <FormLabel>Use SSL/TLS</FormLabel>
+                                </div>
+                                <FormControl>
+                                <Switch
+                                    checked={field.value}
+                                    onCheckedChange={field.onChange}
+                                />
+                                </FormControl>
+                            </FormItem>
+                            )}
+                        />
+                        </div>
+                        <FormField
                         control={form.control}
-                        name="secure"
+                        name="username"
                         render={({ field }) => (
-                        <FormItem className="col-span-2 flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm mt-2">
-                            <div className="space-y-0.5">
-                            <FormLabel>Use SSL/TLS</FormLabel>
-                            </div>
+                            <FormItem>
+                            <FormLabel>Username</FormLabel>
                             <FormControl>
-                            <Switch
-                                checked={field.value}
-                                onCheckedChange={field.onChange}
-                            />
+                                <Input placeholder="your-username" {...field} />
                             </FormControl>
-                        </FormItem>
+                            <FormMessage />
+                            </FormItem>
                         )}
-                    />
-                    </div>
-                    <FormField
-                    control={form.control}
-                    name="username"
-                    render={({ field }) => (
-                        <FormItem>
-                        <FormLabel>Username</FormLabel>
-                        <FormControl>
-                            <Input placeholder="your-username" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                        </FormItem>
-                    )}
-                    />
-                    <FormField
-                    control={form.control}
-                    name="password"
-                    render={({ field }) => (
-                        <FormItem>
-                        <FormLabel>Password / API Key</FormLabel>
-                        <FormControl>
-                            <Input type="password" {...field} />
-                        </FormControl>
-                        <FormDescription>
-                            Your password will be stored securely.
-                        </FormDescription>
-                        <FormMessage />
-                        </FormItem>
-                    )}
-                    />
+                        />
+                        <FormField
+                        control={form.control}
+                        name="password"
+                        render={({ field }) => (
+                            <FormItem>
+                            <FormLabel>Password / API Key</FormLabel>
+                            <FormControl>
+                                <Input type="password" {...field} />
+                            </FormControl>
+                            <FormDescription>
+                                Your password will be stored securely.
+                            </FormDescription>
+                            <FormMessage />
+                            </FormItem>
+                        )}
+                        />
 
-                    <hr className="my-6"/>
+                        <hr className="my-6"/>
 
-                    <FormField
-                      control={form.control}
-                      name="testEmail"
-                      render={({ field }) => (
-                          <FormItem>
-                          <FormLabel>Test Recipient Email</FormLabel>
-                          <FormControl>
-                              <Input placeholder="recipient@example.com" {...field} />
-                          </FormControl>
-                          <FormDescription>
-                              An email will be sent to this address to verify the connection.
-                          </FormDescription>
-                          <FormMessage />
-                          </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="testMessage"
-                      render={({ field }) => (
-                          <FormItem>
-                          <FormLabel>Test Message (Optional)</FormLabel>
-                          <FormControl>
-                              <Textarea placeholder="Type a custom message for the test email." {...field} />
-                          </FormControl>
-                          <FormMessage />
-                          </FormItem>
-                      )}
-                    />
-                    <Button type="submit" disabled={isSubmitting}>
-                        {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                        Test & Save Account
-                    </Button>
-                </form>
-            </Form>
+                        <FormField
+                          control={form.control}
+                          name="testEmail"
+                          render={({ field }) => (
+                              <FormItem>
+                              <FormLabel>Test Recipient Email</FormLabel>
+                              <FormControl>
+                                  <Input placeholder="recipient@example.com" {...field} />
+                              </FormControl>
+                              <FormDescription>
+                                  An email will be sent to this address to verify the connection.
+                              </FormDescription>
+                              <FormMessage />
+                              </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name="testMessage"
+                          render={({ field }) => (
+                              <FormItem>
+                              <FormLabel>Test Message (Optional)</FormLabel>
+                              <FormControl>
+                                  <Textarea placeholder="Type a custom message for the test email." {...field} />
+                              </FormControl>
+                              <FormMessage />
+                              </FormItem>
+                          )}
+                        />
+                        <Button type="submit" disabled={isSubmitting}>
+                            {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                            Test & Save Account
+                        </Button>
+                    </form>
+                </Form>
+            )}
         </CardContent>
       </Card>
 

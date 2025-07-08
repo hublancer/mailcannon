@@ -3,17 +3,41 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    // WARNING: INSECURE RULE FOR DEMONSTRATION PURPOSES
-    // This allows any server process or client to read and write SMTP account credentials.
-    // This is NOT safe for production. A proper fix involves using the Firebase Admin SDK
-    // for server-side operations to securely manage data.
-    match /users/{userId}/smtpAccounts/{accountId} {
-      allow read, write: if true;
+  
+    function isOwner(userId) {
+      return request.auth.uid == userId;
     }
 
-    // This allows an authenticated user to manage all of their other data securely.
-    match /users/{userId}/{document=**} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+    function isAdmin() {
+      // Allow access if the user document has role 'admin'
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // Admins can read/write any document in any top-level collection
+    match /{collection}/{docId} {
+        allow read, write: if isAdmin();
+    }
+    
+    // Plans are public to read for any authenticated user
+    match /plans/{planId} {
+        allow get, list: if request.auth != null;
+    }
+    
+    // Users can read and write to their own user document
+    match /users/{userId} {
+      allow read, update: if isOwner(userId);
+      // create is handled by a backend function (or registration), not directly by client
+    }
+    
+    // Users can create payments for themselves
+    match /payments/{paymentId} {
+        allow create: if isOwner(request.resource.data.userId);
+        // Only admins can read/update payment status
+    }
+    
+    // Users can manage their own subcollections
+    match /users/{userId}/{userCollection}/{docId} {
+      allow read, write, delete: if isOwner(userId);
     }
   }
 }

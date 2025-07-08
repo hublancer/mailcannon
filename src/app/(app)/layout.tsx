@@ -25,6 +25,7 @@ import {
   PanelLeft,
   LogOut,
   Loader2,
+  CreditCard,
 } from 'lucide-react';
 import { MailCannonIcon } from '@/components/icons';
 import { Button } from '@/components/ui/button';
@@ -38,6 +39,7 @@ const navItems = [
   { href: '/recipients', icon: Users, label: 'Recipients' },
   { href: '/smtp-accounts', icon: Server, label: 'SMTP Accounts' },
   { href: '/tracking', icon: LineChart, label: 'Tracking' },
+  { href: '/billing', icon: CreditCard, label: 'Billing' },
 ];
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
