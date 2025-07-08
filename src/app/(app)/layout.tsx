@@ -36,6 +36,7 @@ import { signOut } from 'firebase/auth';
 const navItems = [
   { href: '/campaigns', icon: Send, label: 'Campaigns' },
   { href: '/recipients', icon: Users, label: 'Recipients' },
+  { href: '/lead-manager', icon: Users, label: 'Lead Manager' },
   { href: '/smtp-accounts', icon: Server, label: 'SMTP Accounts' },
   { href: '/tracking', icon: LineChart, label: 'Tracking' },
   { href: '/billing', icon: CreditCard, label: 'Plans' },
