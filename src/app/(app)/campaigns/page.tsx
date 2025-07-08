@@ -47,6 +47,8 @@ import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { sendCampaignEmail } from '@/app/actions/send-campaign-email';
 import { Progress } from '@/components/ui/progress';
+import { getDoc, doc } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 
 export default function CampaignsPage() {
   const [campaigns, setCampaigns] = React.useState<Campaign[]>([]);
@@ -61,6 +63,10 @@ export default function CampaignsPage() {
   // Campaign running state
   const [activeCampaignId, setActiveCampaignId] = React.useState<string | null>(null);
   const timeoutRef = React.useRef<NodeJS.Timeout | null>(null);
+  
+  // Ref to hold the latest campaigns to avoid stale state in timeouts
+  const campaignsRef = React.useRef(campaigns);
+  campaignsRef.current = campaigns;
 
   React.useEffect(() => {
     const unsubscribeAuth = auth.onAuthStateChanged((user) => {
@@ -74,6 +80,11 @@ export default function CampaignsPage() {
       setIsLoading(true);
       const unsubCampaigns = getCampaigns(user.uid, (fetchedCampaigns) => {
         setCampaigns(fetchedCampaigns);
+        // If the active campaign is no longer 'Running', stop the loop.
+        const activeCampaign = fetchedCampaigns.find(c => c.id === activeCampaignId);
+        if (activeCampaign && activeCampaign.status !== 'Running') {
+            setActiveCampaignId(null);
+        }
         setIsLoading(false);
       });
       const unsubRecipients = getRecipientLists(user.uid, setRecipientLists);
@@ -87,7 +98,7 @@ export default function CampaignsPage() {
       setRecipientLists([]);
       setIsLoading(false);
     }
-  }, [user]);
+  }, [user, activeCampaignId]);
 
   // Cleanup timeout on unmount
   React.useEffect(() => {
@@ -101,12 +112,17 @@ export default function CampaignsPage() {
   const sendNextEmail = React.useCallback(async (campaignId: string, recipientEmails: string[], currentIndex: number) => {
       if (!user) return;
 
-      const campaign = campaigns.find(c => c.id === campaignId);
+      // Use the ref to get the latest campaign data
+      const campaign = campaignsRef.current.find(c => c.id === campaignId);
+
+      // Stop if campaign is gone or no longer running
       if (!campaign || campaign.status !== 'Running') {
           setActiveCampaignId(null);
+          if (timeoutRef.current) clearTimeout(timeoutRef.current);
           return;
       }
 
+      // Stop if we've sent all emails
       if (currentIndex >= recipientEmails.length) {
           await updateCampaign(user.uid, campaign.id, { status: 'Completed' });
           setActiveCampaignId(null);
@@ -118,13 +134,17 @@ export default function CampaignsPage() {
       const result = await sendCampaignEmail({
           to: recipient,
           subject: campaign.emailSubject,
-          html: campaign.emailBody, // Placeholder replacement would happen here in a real scenario
+          html: campaign.emailBody,
           userId: user.uid,
           smtpAccountId: campaign.smtpAccountId,
       });
 
-      const updatedSentCount = campaign.sentCount + (result.success ? 1 : 0);
-      const updatedFailedCount = campaign.failedCount + (result.success ? 0 : 1);
+      // To avoid race conditions, fetch the latest counts before updating
+      const campaignDoc = await getDoc(doc(db, 'users', user.uid, 'campaigns', campaign.id));
+      const latestData = campaignDoc.data() as Campaign;
+      
+      const updatedSentCount = (latestData.sentCount || 0) + (result.success ? 1 : 0);
+      const updatedFailedCount = (latestData.failedCount || 0) + (result.success ? 0 : 1);
       
       await updateCampaign(user.uid, campaign.id, {
           sentCount: updatedSentCount,
@@ -133,11 +153,11 @@ export default function CampaignsPage() {
 
       const nextIndex = currentIndex + 1;
       if (nextIndex < recipientEmails.length) {
-        // First email is sent instantly, subsequent have delay.
         let delay = 0;
         if (campaign.speedLimit > 0) {
             const avgDelay = (3600 * 1000) / campaign.speedLimit;
-            delay = avgDelay * (0.5 + Math.random());
+            // Add jitter to the delay to appear more human
+            delay = avgDelay * (0.75 + Math.random() * 0.5);
         }
         
         timeoutRef.current = setTimeout(() => sendNextEmail(campaignId, recipientEmails, nextIndex), delay);
@@ -146,7 +166,7 @@ export default function CampaignsPage() {
         setActiveCampaignId(null);
         toast({ title: 'Campaign Finished', description: `Campaign "${campaign.campaignName}" has completed.`});
       }
-  }, [campaigns, user, toast]);
+  }, [user, toast]);
 
   const handleStartCampaign = async (campaign: Campaign) => {
     if (!user) return;
@@ -162,15 +182,24 @@ export default function CampaignsPage() {
             return;
         }
 
+        const currentIndex = (campaign.sentCount || 0) + (campaign.failedCount || 0);
+        if (currentIndex >= recipients.length) {
+            toast({ title: 'Campaign Already Completed', description: 'This campaign has already been sent to all recipients.' });
+            if (campaign.status !== 'Completed') {
+                await updateCampaign(user.uid, campaign.id, { status: 'Completed' });
+            }
+            return;
+        }
+
         await updateCampaign(user.uid, campaign.id, { status: 'Running' });
         setActiveCampaignId(campaign.id);
         toast({ title: 'Campaign Started!', description: `Campaign "${campaign.campaignName}" is now running.`});
 
-        // Start sending the first email
-        sendNextEmail(campaign.id, recipients, 0);
+        // Start sending the first email immediately
+        sendNextEmail(campaign.id, recipients, currentIndex);
 
     } catch (error) {
-        toast({ variant: 'destructive', title: 'Error', description: 'Could not start campaign.' });
+        toast({ variant: 'destructive', title: 'Error', description: (error as Error).message || 'Could not start campaign.' });
     }
   };
 
@@ -189,6 +218,7 @@ export default function CampaignsPage() {
     if (timeoutRef.current) {
         clearTimeout(timeoutRef.current);
     }
+    // Set a final status. We consider it 'Completed' as it's a manual final action.
     await updateCampaign(user.uid, campaign.id, { status: 'Completed' });
     setActiveCampaignId(null);
     toast({ title: 'Campaign Stopped', description: `"${campaign.campaignName}" has been manually stopped.` });
@@ -264,7 +294,8 @@ export default function CampaignsPage() {
                   const list = getRecipientList(campaign.recipientListId);
                   const totalRecipients = list?.count || 0;
                   const progress = totalRecipients > 0 ? ((campaign.sentCount + campaign.failedCount) / totalRecipients) * 100 : 0;
-                  
+                  const isCampaignRunning = activeCampaignId === campaign.id;
+
                   return (
                     <TableRow key={campaign.id}>
                       <TableCell className="font-medium">{campaign.campaignName}</TableCell>
@@ -282,14 +313,14 @@ export default function CampaignsPage() {
                               'bg-red-100 text-red-800': campaign.status === 'Failed',
                           })}
                         >
-                          {campaign.status === 'Running' && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
+                          {isCampaignRunning && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
                           {campaign.status}
                         </Badge>
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
                            <div className="w-28">
-                            {campaign.status === 'Running' || campaign.status === 'Paused' || campaign.status === 'Completed' ? (
+                            {campaign.status !== 'Draft' && campaign.status !== 'Scheduled' ? (
                                 <Progress value={progress} className="h-2" />
                             ) : (
                                 <span className="text-muted-foreground text-xs">Not started</span>
@@ -307,7 +338,7 @@ export default function CampaignsPage() {
                               aria-haspopup="true"
                               size="icon"
                               variant="ghost"
-                              disabled={activeCampaignId !== null && activeCampaignId !== campaign.id}
+                              disabled={activeCampaignId !== null && !isCampaignRunning}
                             >
                               <MoreHorizontal className="h-4 w-4" />
                               <span className="sr-only">Toggle menu</span>
@@ -321,13 +352,13 @@ export default function CampaignsPage() {
                                     {campaign.status === 'Paused' ? 'Resume' : 'Start'}
                                 </DropdownMenuItem>
                             )}
-                            { campaign.status === 'Running' && (
+                            { isCampaignRunning && (
                                 <DropdownMenuItem onSelect={() => handlePauseCampaign(campaign)}>
                                     <Pause className="mr-2"/>
                                     Pause
                                 </DropdownMenuItem>
                             )}
-                             { campaign.status === 'Running' && (
+                             { isCampaignRunning && (
                                 <DropdownMenuItem onSelect={() => handleStopCampaign(campaign)}>
                                     <StopCircle className="mr-2"/>
                                     Stop
@@ -336,7 +367,7 @@ export default function CampaignsPage() {
                             <DropdownMenuItem disabled>Edit</DropdownMenuItem>
                             <DropdownMenuItem disabled>View Report</DropdownMenuItem>
                             <DropdownMenuSeparator />
-                            <DropdownMenuItem className="text-destructive" onSelect={() => openDeleteDialog(campaign)}>
+                            <DropdownMenuItem className="text-destructive" onSelect={() => openDeleteDialog(campaign)} disabled={isCampaignRunning}>
                               Delete
                             </DropdownMenuItem>
                           </DropdownMenuContent>
