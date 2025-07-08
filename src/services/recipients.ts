@@ -1,6 +1,6 @@
 
 import { db } from '@/lib/firebase';
-import { collection, addDoc, onSnapshot, query, serverTimestamp, writeBatch, doc, getDocs, Timestamp, orderBy, updateDoc, deleteDoc } from 'firebase/firestore';
+import { collection, addDoc, onSnapshot, query, serverTimestamp, writeBatch, doc, getDocs, Timestamp, orderBy, updateDoc, deleteDoc, increment } from 'firebase/firestore';
 
 export interface RecipientList {
     id: string;
@@ -148,5 +148,45 @@ export const deleteRecipientList = async (userId: string, listId: string) => {
     } catch (error) {
         console.error("Error deleting recipient list: ", error);
         throw new Error("Failed to delete recipient list and its recipients.");
+    }
+};
+
+export const addRecipientsToList = async (userId: string, listId: string, emails: string[]) => {
+    if (!userId) throw new Error('User not logged in');
+    if (emails.length === 0) return;
+
+    const batch = writeBatch(db);
+    const listRef = doc(db, 'users', userId, 'recipientLists', listId);
+    const recipientsColRef = collection(db, 'users', userId, 'recipientLists', listId, 'recipients');
+
+    try {
+        emails.forEach(email => {
+            if (email && email.trim() !== '') {
+                const emailDocRef = doc(recipientsColRef);
+                batch.set(emailDocRef, { email: email.trim(), addedAt: serverTimestamp() });
+            }
+        });
+        batch.update(listRef, { count: increment(emails.length) });
+        await batch.commit();
+    } catch (error) {
+        console.error("Error adding recipients to list: ", error);
+        throw new Error("Failed to add new recipients.");
+    }
+};
+
+export const deleteRecipient = async (userId: string, listId: string, recipientId: string) => {
+    if (!userId) throw new Error('User not logged in');
+
+    const batch = writeBatch(db);
+    const listRef = doc(db, 'users', userId, 'recipientLists', listId);
+    const recipientRef = doc(db, 'users', userId, 'recipientLists', listId, 'recipients', recipientId);
+
+    try {
+        batch.delete(recipientRef);
+        batch.update(listRef, { count: increment(-1) });
+        await batch.commit();
+    } catch (error) {
+        console.error("Error deleting recipient: ", error);
+        throw new Error("Failed to delete recipient.");
     }
 };

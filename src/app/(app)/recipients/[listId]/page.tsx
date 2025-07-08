@@ -19,9 +19,10 @@ import {
     AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { auth } from '@/lib/firebase';
-import { getRecipientList, getRecipients, deleteRecipientList, type RecipientList, type Recipient } from '@/services/recipients';
+import { getRecipientList, getRecipients, deleteRecipientList, deleteRecipient, addRecipientsToList, type RecipientList, type Recipient } from '@/services/recipients';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
+import { AddRecipientsDialog } from '@/components/add-recipients-dialog';
 
 export default function ManageRecipientListPage() {
   const params = useParams();
@@ -33,7 +34,15 @@ export default function ManageRecipientListPage() {
   const [isLoading, setIsLoading] = React.useState(true);
   const [user, setUser] = React.useState(auth.currentUser);
   const { toast } = useToast();
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = React.useState(false);
+  
+  // Dialog states
+  const [isDeleteListDialogOpen, setIsDeleteListDialogOpen] = React.useState(false);
+  const [isDeleteRecipientDialogOpen, setIsDeleteRecipientDialogOpen] = React.useState(false);
+  const [isAddDialogOpen, setIsAddDialogOpen] = React.useState(false);
+
+  // Data for dialogs
+  const [recipientToDelete, setRecipientToDelete] = React.useState<Recipient | null>(null);
+
 
   React.useEffect(() => {
     const unsubscribeAuth = auth.onAuthStateChanged((user) => {
@@ -73,9 +82,37 @@ export default function ManageRecipientListPage() {
     } catch (error) {
         toast({ variant: 'destructive', title: 'Error', description: (error as Error).message });
     } finally {
-        setIsDeleteDialogOpen(false);
+        setIsDeleteListDialogOpen(false);
     }
   };
+
+  const openDeleteRecipientDialog = (recipient: Recipient) => {
+    setRecipientToDelete(recipient);
+    setIsDeleteRecipientDialogOpen(true);
+  };
+
+  const handleDeleteRecipient = async () => {
+    if (!user || !listId || !recipientToDelete) return;
+    try {
+        await deleteRecipient(user.uid, listId, recipientToDelete.id);
+        toast({ title: 'Success!', description: `Recipient ${recipientToDelete.email} has been removed.` });
+    } catch (error) {
+        toast({ variant: 'destructive', title: 'Error', description: (error as Error).message });
+    } finally {
+        setIsDeleteRecipientDialogOpen(false);
+        setRecipientToDelete(null);
+    }
+  };
+
+  const handleAddRecipients = async (emails: string[]) => {
+    if (!user || !listId) return;
+    try {
+        await addRecipientsToList(user.uid, listId, emails);
+        toast({ title: 'Success!', description: `New recipients have been added to the list.` });
+    } catch (error) {
+        toast({ variant: 'destructive', title: 'Error', description: (error as Error).message });
+    }
+  }
 
 
   if (isLoading) {
@@ -109,11 +146,11 @@ export default function ManageRecipientListPage() {
                 <ArrowLeft className="mr-2 h-4 w-4" />
                 Back to All Lists
             </Button>
-            <Button disabled>
+            <Button onClick={() => setIsAddDialogOpen(true)}>
                 <UserPlus className="mr-2 h-4 w-4" />
                 Add Recipients
             </Button>
-            <Button variant="destructive" onClick={() => setIsDeleteDialogOpen(true)}>
+            <Button variant="destructive" onClick={() => setIsDeleteListDialogOpen(true)}>
                 <Trash2 className="mr-2 h-4 w-4" />
                 Delete List
             </Button>
@@ -147,7 +184,7 @@ export default function ManageRecipientListPage() {
                                 <TableCell className="font-medium">{recipient.email}</TableCell>
                                 <TableCell>{recipient.addedAt ? format(recipient.addedAt, 'PPP') : 'N/A'}</TableCell>
                                 <TableCell className="text-right">
-                                    <Button variant="ghost" size="sm" disabled>Remove</Button>
+                                    <Button variant="ghost" size="sm" onClick={() => openDeleteRecipientDialog(recipient)}>Remove</Button>
                                 </TableCell>
                             </TableRow>
                         ))}
@@ -157,7 +194,8 @@ export default function ManageRecipientListPage() {
         </CardContent>
       </Card>
 
-      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+      {/* Dialog for deleting entire list */}
+      <AlertDialog open={isDeleteListDialogOpen} onOpenChange={setIsDeleteListDialogOpen}>
         <AlertDialogContent>
             <AlertDialogHeader>
                 <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
@@ -175,6 +213,33 @@ export default function ManageRecipientListPage() {
             </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Dialog for deleting single recipient */}
+      <AlertDialog open={isDeleteRecipientDialogOpen} onOpenChange={setIsDeleteRecipientDialogOpen}>
+        <AlertDialogContent>
+            <AlertDialogHeader>
+                <AlertDialogTitle>Remove Recipient?</AlertDialogTitle>
+                <AlertDialogDescription>
+                    Are you sure you want to remove 
+                    <span className="font-semibold">{` ${recipientToDelete?.email} `}</span>
+                    from this list? This action cannot be undone.
+                </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={handleDeleteRecipient} className="text-destructive-foreground bg-destructive hover:bg-destructive/90">
+                    Yes, remove
+                </AlertDialogAction>
+            </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Dialog for adding new recipients */}
+      <AddRecipientsDialog 
+        isOpen={isAddDialogOpen}
+        onOpenChange={setIsAddDialogOpen}
+        onAddRecipients={handleAddRecipients}
+      />
     </>
   );
 }
