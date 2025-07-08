@@ -1,4 +1,3 @@
-
 'use client';
 
 import * as React from 'react';
@@ -167,6 +166,10 @@ export default function SmtpAccountsPage() {
     }
   };
 
+  const handleInlineFormSubmit = (data: FormValues) => {
+    handleSaveAccount(data);
+  };
+
   return (
     <>
       <PageHeader
@@ -254,7 +257,7 @@ export default function SmtpAccountsPage() {
         </CardHeader>
         <CardContent>
             <Form {...form}>
-                <form onSubmit={form.handleSubmit(handleSaveAccount)} className="space-y-4">
+                <form onSubmit={form.handleSubmit(handleInlineFormSubmit)} className="space-y-4">
                     <FormField
                     control={form.control}
                     name="server"
