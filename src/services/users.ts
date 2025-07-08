@@ -1,10 +1,11 @@
 
 import { db } from '@/lib/firebase';
-import { collection, doc, onSnapshot, query, serverTimestamp, setDoc, Timestamp, updateDoc, getDocs } from 'firebase/firestore';
+import { collection, doc, onSnapshot, query, serverTimestamp, setDoc, Timestamp, updateDoc, getDocs, getDoc } from 'firebase/firestore';
 
 export interface UserProfile {
   uid: string;
   email: string;
+  name: string;
   role: 'admin' | 'user';
   createdAt: Date;
   subscription?: {
@@ -17,15 +18,16 @@ export interface UserProfile {
 }
 
 // Function to create a user profile document in Firestore
-export const createUserProfile = async (uid: string, email: string, role: 'admin' | 'user') => {
+export const createUserProfile = async (uid: string, data: { name: string, email: string, role: 'admin' | 'user' }) => {
     const userRef = doc(db, 'users', uid);
     const now = new Date();
     const trialEndDate = new Date();
     trialEndDate.setDate(now.getDate() + 1); // 1-day trial
 
     await setDoc(userRef, {
-        email,
-        role,
+        name: data.name,
+        email: data.email,
+        role: data.role,
         createdAt: serverTimestamp(),
         subscription: {
             planId: 'trial',

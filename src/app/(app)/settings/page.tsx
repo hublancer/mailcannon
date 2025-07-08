@@ -1,3 +1,11 @@
+
+'use client';
+
+import * as React from 'react';
+import { z } from 'zod';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -5,8 +13,106 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { PageHeader } from '@/components/page-header';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { useToast } from '@/hooks/use-toast';
+import { auth, db } from '@/lib/firebase';
+import { EmailAuthProvider, reauthenticateWithCredential, updatePassword, updateProfile } from 'firebase/auth';
+import { doc, updateDoc } from 'firebase/firestore';
+
+const profileFormSchema = z.object({
+  name: z.string().min(2, 'Name must be at least 2 characters.'),
+  email: z.string().email(),
+  currentPassword: z.string().optional(),
+  newPassword: z.string().min(6, 'New password must be at least 6 characters.').optional().or(z.literal('')),
+}).refine(data => {
+    if (data.newPassword && !data.currentPassword) {
+      return false;
+    }
+    return true;
+}, {
+    message: 'Current password is required to set a new password.',
+    path: ['currentPassword'],
+});
+
+type ProfileFormValues = z.infer<typeof profileFormSchema>;
 
 export default function SettingsPage() {
+  const { toast } = useToast();
+  const [user, setUser] = React.useState(auth.currentUser);
+  const [isLoading, setIsLoading] = React.useState(false);
+  
+  const form = useForm<ProfileFormValues>({
+    resolver: zodResolver(profileFormSchema),
+    defaultValues: {
+      name: '',
+      email: '',
+      currentPassword: '',
+      newPassword: '',
+    },
+  });
+
+  React.useEffect(() => {
+    const unsubscribe = auth.onAuthStateChanged((user) => {
+      setUser(user);
+      if (user) {
+        form.reset({
+          name: user.displayName || '',
+          email: user.email || '',
+        });
+      }
+    });
+    return () => unsubscribe();
+  }, [form]);
+
+  async function onSubmit(data: ProfileFormValues) {
+    if (!user) {
+      toast({ variant: 'destructive', title: 'Error', description: 'Not authenticated.' });
+      return;
+    }
+    setIsLoading(true);
+
+    try {
+      let requiresReauth = data.newPassword;
+      if (requiresReauth && data.currentPassword) {
+        const credential = EmailAuthProvider.credential(user.email!, data.currentPassword);
+        await reauthenticateWithCredential(user, credential);
+        
+        if (data.newPassword) {
+          await updatePassword(user, data.newPassword);
+        }
+      }
+
+      const promises = [];
+      if (user.displayName !== data.name) {
+          promises.push(updateProfile(user, { displayName: data.name }));
+          promises.push(updateDoc(doc(db, 'users', user.uid), { name: data.name }));
+      }
+      
+      await Promise.all(promises);
+
+      toast({
+        title: 'Profile Updated',
+        description: 'Your settings have been saved successfully.',
+      });
+      form.reset({ ...data, currentPassword: '', newPassword: '' });
+
+    } catch (error: any) {
+        let description = "An unexpected error occurred.";
+        if (error.code === 'auth/wrong-password') {
+            description = "The current password you entered is incorrect.";
+        } else if (error.code === 'auth/requires-recent-login') {
+            description = "This action is sensitive and requires recent authentication. Please log in again.";
+        }
+        toast({
+            variant: 'destructive',
+            title: 'Update Failed',
+            description,
+        });
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
   return (
     <>
       <PageHeader
@@ -27,24 +133,71 @@ export default function SettingsPage() {
                 Update your personal information and password.
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="space-y-2">
-                <Label htmlFor="name">Full Name</Label>
-                <Input id="name" defaultValue="Admin User" />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="email">Email Address</Label>
-                <Input id="email" type="email" defaultValue="admin@mailcannon.com" />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="current-password">Current Password</Label>
-                <Input id="current-password" type="password" />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="new-password">New Password</Label>
-                <Input id="new-password" type="password" />
-              </div>
-              <Button>Update Profile</Button>
+            <CardContent>
+              <Form {...form}>
+                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+                  <FormField
+                    control={form.control}
+                    name="name"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Full Name</FormLabel>
+                        <FormControl>
+                          <Input placeholder="Your full name" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="email"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Email Address</FormLabel>
+                        <FormControl>
+                           <Input type="email" readOnly disabled {...field} />
+                        </FormControl>
+                         <FormDescription>Changing email address is not supported yet.</FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="currentPassword"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Current Password</FormLabel>
+                        <FormControl>
+                          <Input type="password" {...field} value={field.value ?? ''} placeholder="Enter your current password" />
+                        </FormControl>
+                        <FormDescription>
+                          Required to change your password.
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="newPassword"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>New Password</FormLabel>
+                        <FormControl>
+                           <Input type="password" {...field} value={field.value ?? ''} placeholder="Enter a new password" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <Button type="submit" disabled={isLoading}>
+                    {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Update Profile
+                  </Button>
+                </form>
+              </Form>
             </CardContent>
           </Card>
         </TabsContent>

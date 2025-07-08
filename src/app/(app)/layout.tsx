@@ -202,8 +202,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                <MailCannonIcon className="w-6 h-6 text-primary" />
                <span className="font-headline">MailCannon</span>
             </div>
-            <Button variant="ghost" size="icon">
-              <CircleUser className="w-6 h-6" />
+            <Button asChild variant="ghost" size="icon">
+              <Link href="/settings">
+                <CircleUser className="w-6 h-6" />
+              </Link>
             </Button>
           </header>
           <main className="flex-1 p-4 overflow-auto">{children}</main>

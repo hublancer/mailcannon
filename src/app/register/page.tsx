@@ -17,12 +17,13 @@ import { Label } from '@/components/ui/label';
 import { MailCannonIcon } from '@/components/icons';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { AlertCircle, Loader2 } from "lucide-react"
-import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 import { createUserProfile } from '@/services/users';
 
 export default function RegisterPage() {
   const router = useRouter();
+  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -37,6 +38,10 @@ export default function RegisterPage() {
       setError("Passwords do not match.");
       return;
     }
+    if (name.trim() === '') {
+        setError("Please enter your full name.");
+        return;
+    }
 
     setIsLoading(true);
 
@@ -44,8 +49,10 @@ export default function RegisterPage() {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
       
+      await updateProfile(user, { displayName: name });
+      
       const role = email === 'admin@hublancer.pk' ? 'admin' : 'user';
-      await createUserProfile(user.uid, user.email!, role);
+      await createUserProfile(user.uid, { name, email: user.email!, role });
       
       if (role === 'admin') {
           router.push('/admin/dashboard');
@@ -93,6 +100,17 @@ export default function RegisterPage() {
                  </AlertDescription>
                </Alert>
             )}
+            <div className="space-y-2">
+              <Label htmlFor="name">Full Name</Label>
+              <Input
+                id="name"
+                type="text"
+                placeholder="John Doe"
+                required
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+              />
+            </div>
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
               <Input
