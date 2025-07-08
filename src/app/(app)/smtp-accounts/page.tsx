@@ -1,3 +1,4 @@
+
 'use client';
 
 import * as React from 'react';
@@ -13,6 +14,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
+import { Textarea } from '@/components/ui/textarea';
 import { PageHeader } from '@/components/page-header';
 import { AddSmtpAccountDialog } from '@/components/add-smtp-account-dialog';
 import { TestSmtpDialog } from '@/components/test-smtp-dialog';
@@ -29,6 +31,8 @@ const formSchema = z.object({
   username: z.string().min(1, 'Username is required'),
   password: z.string().min(1, 'Password is required'),
   secure: z.boolean().default(true),
+  testEmail: z.string().email({ message: "Please enter a valid email for testing." }),
+  testMessage: z.string().optional(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -59,6 +63,8 @@ export default function SmtpAccountsPage() {
       username: 'info@hublancer.pk',
       password: '0300Ali$',
       secure: true,
+      testEmail: 'info@hublancer.pk',
+      testMessage: 'This is a test message from MailCannon to confirm the SMTP connection is working!',
     },
   });
 
@@ -153,7 +159,7 @@ export default function SmtpAccountsPage() {
     }
   };
 
-  const handleInlineFormSubmit = async (data: FormValues) => {
+  const handleTestAndSaveSubmit = async (data: FormValues) => {
     if (!user) {
         toast({ variant: "destructive", title: "Error", description: "You must be logged in." });
         return;
@@ -170,10 +176,12 @@ export default function SmtpAccountsPage() {
     if (result.success) {
         toast({
             title: "Connection Successful!",
-            description: "A test email was sent to your address. Saving account...",
+            description: "A test email was sent. Saving account...",
         });
         try {
-            await addSmtpAccount(user.uid, data); 
+            // Exclude test fields before saving
+            const { testEmail, testMessage, ...accountToSave } = data;
+            await addSmtpAccount(user.uid, accountToSave); 
             toast({
                 title: "Account Saved!",
                 description: "Your SMTP account has been successfully tested and saved.",
@@ -285,7 +293,7 @@ export default function SmtpAccountsPage() {
         </CardHeader>
         <CardContent>
             <Form {...form}>
-                <form onSubmit={form.handleSubmit(handleInlineFormSubmit)} className="space-y-4">
+                <form onSubmit={form.handleSubmit(handleTestAndSaveSubmit)} className="space-y-4">
                     <FormField
                     control={form.control}
                     name="server"
@@ -360,9 +368,41 @@ export default function SmtpAccountsPage() {
                         </FormItem>
                     )}
                     />
+
+                    <hr className="my-6"/>
+
+                    <FormField
+                      control={form.control}
+                      name="testEmail"
+                      render={({ field }) => (
+                          <FormItem>
+                          <FormLabel>Test Recipient Email</FormLabel>
+                          <FormControl>
+                              <Input placeholder="recipient@example.com" {...field} />
+                          </FormControl>
+                          <FormDescription>
+                              An email will be sent to this address to verify the connection.
+                          </FormDescription>
+                          <FormMessage />
+                          </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="testMessage"
+                      render={({ field }) => (
+                          <FormItem>
+                          <FormLabel>Test Message (Optional)</FormLabel>
+                          <FormControl>
+                              <Textarea placeholder="Type a custom message for the test email." {...field} />
+                          </FormControl>
+                          <FormMessage />
+                          </FormItem>
+                      )}
+                    />
                     <Button type="submit" disabled={isSubmitting}>
                         {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                        Save Account
+                        Test & Save Account
                     </Button>
                 </form>
             </Form>

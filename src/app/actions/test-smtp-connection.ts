@@ -1,14 +1,24 @@
+
 'use server';
 
 import nodemailer from 'nodemailer';
 import type { SmtpAccountData } from '@/services/smtp';
 
-export async function testSmtpConnection(accountData: SmtpAccountData) {
+// The input for this action now includes the recipient email and an optional message
+type TestConnectionParams = SmtpAccountData & {
+    testEmail: string;
+    testMessage?: string;
+};
+
+export async function testSmtpConnection(accountData: TestConnectionParams) {
     try {
-        const { server, port, secure, username, password } = accountData;
+        const { server, port, secure, username, password, testEmail, testMessage } = accountData;
 
         if (!password) {
             return { success: false, error: 'Password is required for testing.' };
+        }
+        if (!testEmail) {
+            return { success: false, error: 'Test recipient email is required.' };
         }
 
         const transporter = nodemailer.createTransport({
@@ -28,13 +38,17 @@ export async function testSmtpConnection(accountData: SmtpAccountData) {
         // Verify the connection first
         await transporter.verify();
         
-        // Then send a test email to self to confirm send capability
+        const defaultSubject = 'MailCannon SMTP Configuration Verified';
+        const defaultHtml = '<h1>Success!</h1><p>Your SMTP account was successfully verified and is now ready to use with MailCannon.</p>';
+        const defaultText = 'Your SMTP account was successfully verified and is now ready to use with MailCannon.';
+
+        // Then send a test email to the specified recipient to confirm send capability
         await transporter.sendMail({
             from: `"${username}" <${username}>`,
-            to: username,
-            subject: 'MailCannon SMTP Configuration Verified',
-            text: 'Your SMTP account was successfully verified and is now ready to use with MailCannon.',
-            html: '<h1>Success!</h1><p>Your SMTP account was successfully verified and is now ready to use with MailCannon.</p>',
+            to: testEmail, // Use the provided test email
+            subject: defaultSubject,
+            text: testMessage || defaultText, // Use custom message or default
+            html: testMessage ? `<p>${testMessage.replace(/\n/g, '<br>')}</p>` : defaultHtml, // Use custom message or default
         });
 
         return { success: true };
