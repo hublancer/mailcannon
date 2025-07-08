@@ -1,3 +1,4 @@
+
 'use client';
 
 import * as React from 'react';
@@ -19,7 +20,6 @@ import {
   Users,
   Server,
   LineChart,
-  FileText,
   Settings,
   CircleUser,
   PanelLeft,
@@ -38,7 +38,6 @@ const navItems = [
   { href: '/recipients', icon: Users, label: 'Recipients' },
   { href: '/smtp-accounts', icon: Server, label: 'SMTP Accounts' },
   { href: '/tracking', icon: LineChart, label: 'Tracking' },
-  { href: '/logs', icon: FileText, label: 'Logs' },
 ];
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
