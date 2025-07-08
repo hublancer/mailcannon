@@ -65,7 +65,7 @@ export const getCampaigns = (userId: string, callback: (campaigns: Campaign[]) =
     return unsubscribe;
 };
 
-export const updateCampaign = async (userId: string, campaignId: string, data: Partial<Campaign>) => {
+export const updateCampaign = async (userId: string, campaignId: string, data: { [key: string]: any }) => {
     if (!userId) throw new Error('User not logged in');
     try {
         const campaignRef = doc(db, 'users', userId, 'campaigns', campaignId);

@@ -30,13 +30,17 @@ export async function sendCampaignEmail(params: SendCampaignEmailParams) {
 
         const smtpConfig = accountDoc.data();
 
+        if (!smtpConfig.password) {
+            return { success: false, error: 'SMTP account credentials are not complete.' };
+        }
+
         const transporter = nodemailer.createTransport({
             host: smtpConfig.server,
             port: smtpConfig.port,
             secure: smtpConfig.secure, // true for 465, false for other ports
             auth: {
                 user: smtpConfig.username,
-                pass: smtpConfig.password, // IMPORTANT: Ensure password is included when fetching config
+                pass: smtpConfig.password,
             },
             // This setting is crucial for compatibility with many hosting providers
             // like Hostinger who may use self-signed or non-standard SSL certificates.

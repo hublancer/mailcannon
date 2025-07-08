@@ -47,7 +47,7 @@ import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { sendCampaignEmail } from '@/app/actions/send-campaign-email';
 import { Progress } from '@/components/ui/progress';
-import { getDoc, doc } from 'firebase/firestore';
+import { increment } from 'firebase/firestore';
 
 export default function CampaignsPage() {
   const [campaigns, setCampaigns] = React.useState<Campaign[]>([]);
@@ -77,17 +77,14 @@ export default function CampaignsPage() {
   const sendNextEmail = React.useCallback(async (campaignId: string, recipientEmails: string[], currentIndex: number) => {
       if (!user) return;
 
-      // Use the ref to get the latest campaign data, which is updated by the onSnapshot listener
       const campaign = campaignsRef.current.find(c => c.id === campaignId);
 
-      // Stop if campaign is gone, paused, completed, or otherwise not 'Running'
       if (!campaign || campaign.status !== 'Running') {
           setActiveCampaignId(null);
           if (timeoutRef.current) clearTimeout(timeoutRef.current);
           return;
       }
 
-      // Stop if we've sent all emails
       if (currentIndex >= recipientEmails.length) {
           await updateCampaign(user.uid, campaign.id, { status: 'Completed' });
           setActiveCampaignId(null);
@@ -104,25 +101,18 @@ export default function CampaignsPage() {
           smtpAccountId: campaign.smtpAccountId,
       });
 
-      // To avoid race conditions, fetch the latest counts before updating
-      const campaignDoc = await getDoc(doc(db, 'users', user.uid, 'campaigns', campaign.id));
-      const latestData = campaignDoc.data() as Campaign;
-      
-      const updatedSentCount = (latestData.sentCount || 0) + (result.success ? 1 : 0);
-      const updatedFailedCount = (latestData.failedCount || 0) + (result.success ? 0 : 1);
-      
-      await updateCampaign(user.uid, campaign.id, {
-          sentCount: updatedSentCount,
-          failedCount: updatedFailedCount,
-      });
+      // Atomically increment the correct counter in Firestore.
+      // This is safe from race conditions. The onSnapshot listener will update the UI.
+      const updateData = result.success 
+          ? { sentCount: increment(1) }
+          : { failedCount: increment(1) };
+      await updateCampaign(user.uid, campaign.id, updateData);
 
       const nextIndex = currentIndex + 1;
       if (nextIndex < recipientEmails.length) {
         let delay = 0;
-        // Calculate a randomized delay based on the hourly speed limit
         if (campaign.speedLimit > 0) {
             const avgDelay = (3600 * 1000) / campaign.speedLimit;
-            // Add jitter to the delay (+/- 25%) to appear more human
             delay = avgDelay * (0.75 + Math.random() * 0.5);
         }
         
@@ -134,8 +124,6 @@ export default function CampaignsPage() {
       }
   }, [user, toast]);
   
-  // This useEffect hook is responsible for starting and stopping the sending loop
-  // based on real-time data from Firestore.
   React.useEffect(() => {
     if (user) {
       setIsLoading(true);
@@ -143,11 +131,10 @@ export default function CampaignsPage() {
       
       const unsubCampaigns = getCampaigns(user.uid, (fetchedCampaigns) => {
         setCampaigns(fetchedCampaigns);
-        campaignsRef.current = fetchedCampaigns; // Keep the ref updated
+        campaignsRef.current = fetchedCampaigns; 
 
         const activeCampaign = fetchedCampaigns.find(c => c.id === activeCampaignId);
         
-        // **START CONDITION**: If a campaign is active, its status is 'Running', and the loop isn't already going.
         if (activeCampaign && activeCampaign.status === 'Running' && !timeoutRef.current) {
             const startSendingProcess = async () => {
                 try {
@@ -165,7 +152,6 @@ export default function CampaignsPage() {
                         return;
                     }
                     
-                    // Start the sending loop. The first email is sent without delay inside sendNextEmail.
                     sendNextEmail(activeCampaign.id, recipients, currentIndex);
 
                 } catch (error) {
@@ -176,7 +162,6 @@ export default function CampaignsPage() {
             startSendingProcess();
         }
 
-        // **STOP CONDITION**: If the active campaign is no longer in the 'Running' state.
         if (activeCampaignId && (!activeCampaign || activeCampaign.status !== 'Running')) {
             setActiveCampaignId(null);
             if (timeoutRef.current) {
@@ -207,7 +192,6 @@ export default function CampaignsPage() {
         return;
     }
     
-    // This just sets the intention. The useEffect will detect the state change and start the process.
     await updateCampaign(user.uid, campaign.id, { status: 'Running' });
     setActiveCampaignId(campaign.id);
     toast({ title: 'Campaign Queued!', description: `"${campaign.campaignName}" is starting.`});
@@ -230,7 +214,6 @@ export default function CampaignsPage() {
         clearTimeout(timeoutRef.current);
         timeoutRef.current = null;
     }
-    // Set a final status. We consider it 'Completed' as it's a manual final action.
     await updateCampaign(user.uid, campaign.id, { status: 'Completed' });
     setActiveCampaignId(null);
     toast({ title: 'Campaign Stopped', description: `"${campaign.campaignName}" has been manually stopped.` });
