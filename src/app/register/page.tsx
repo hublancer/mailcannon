@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, type FormEvent } from 'react';
@@ -18,6 +19,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { AlertCircle, Loader2 } from "lucide-react"
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
+import { createUserProfile } from '@/services/users';
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -39,8 +41,17 @@ export default function RegisterPage() {
     setIsLoading(true);
 
     try {
-      await createUserWithEmailAndPassword(auth, email, password);
-      router.push('/campaigns'); // Redirect to dashboard on successful registration
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      const user = userCredential.user;
+      
+      const role = email === 'admin@hublancer.pk' ? 'admin' : 'user';
+      await createUserProfile(user.uid, user.email!, role);
+      
+      if (role === 'admin') {
+          router.push('/admin/dashboard');
+      } else {
+          router.push('/campaigns');
+      }
     } catch (err: any) {
       switch (err.code) {
         case 'auth/email-already-in-use':

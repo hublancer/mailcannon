@@ -19,6 +19,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { AlertCircle, Loader2 } from "lucide-react"
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
+import { getUserProfile } from '@/services/users';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -29,9 +30,14 @@ export default function LoginPage() {
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = auth.onAuthStateChanged(user => {
+    const unsubscribe = auth.onAuthStateChanged(async (user) => {
       if (user) {
-        router.replace('/campaigns');
+        const profile = await getUserProfile(user.uid);
+        if (profile?.role === 'admin') {
+            router.replace('/admin/dashboard');
+        } else {
+            router.replace('/campaigns');
+        }
       } else {
         setIsCheckingAuth(false);
       }
