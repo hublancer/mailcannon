@@ -10,9 +10,9 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
-import { leadStatuses, type LeadData } from '@/services/leads';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
+import { type Lead, type LeadData, leadStatuses } from '@/services/leads';
 import { Textarea } from '../ui/textarea';
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '../ui/select';
 
 const formSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters.'),
@@ -24,13 +24,14 @@ const formSchema = z.object({
 
 type FormValues = z.infer<typeof formSchema>;
 
-interface AddLeadDialogProps {
+interface EditLeadDialogProps {
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
-  onAddLead: (lead: LeadData) => Promise<void>;
+  onUpdateLead: (leadId: string, data: Partial<LeadData>) => Promise<void>;
+  lead: Lead | null;
 }
 
-export function AddLeadDialog({ isOpen, onOpenChange, onAddLead }: AddLeadDialogProps) {
+export function EditLeadDialog({ isOpen, onOpenChange, onUpdateLead, lead }: EditLeadDialogProps) {
   const [isSubmitting, setIsSubmitting] = React.useState(false);
 
   const form = useForm<FormValues>({
@@ -45,15 +46,24 @@ export function AddLeadDialog({ isOpen, onOpenChange, onAddLead }: AddLeadDialog
   });
 
   React.useEffect(() => {
-    if (!isOpen) {
+    if (lead && isOpen) {
+      form.reset({
+        name: lead.name,
+        email: lead.email,
+        phone: lead.phone || '',
+        status: lead.status,
+        note: lead.note || '',
+      });
+    } else if (!isOpen) {
       form.reset();
       setIsSubmitting(false);
     }
-  }, [isOpen, form]);
+  }, [lead, isOpen, form]);
 
   const onSubmit = async (values: FormValues) => {
+    if (!lead) return;
     setIsSubmitting(true);
-    await onAddLead(values);
+    await onUpdateLead(lead.id, values);
     // The parent component will handle closing the dialog on success
     setIsSubmitting(false);
   };
@@ -62,50 +72,30 @@ export function AddLeadDialog({ isOpen, onOpenChange, onAddLead }: AddLeadDialog
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Add New Lead</DialogTitle>
+          <DialogTitle>Edit Lead</DialogTitle>
           <DialogDescription>
-            Enter the details for the new lead.
+            Update the details for this lead.
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
             <FormField control={form.control} name="name" render={({ field }) => (
-              <FormItem>
-                <FormLabel>Full Name</FormLabel>
-                <FormControl><Input placeholder="e.g., John Doe" {...field} /></FormControl>
-                <FormMessage />
-              </FormItem>
+              <FormItem><FormLabel>Full Name</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
             )} />
             <FormField control={form.control} name="email" render={({ field }) => (
-              <FormItem>
-                <FormLabel>Email Address</FormLabel>
-                <FormControl><Input type="email" placeholder="e.g., john.doe@example.com" {...field} /></FormControl>
-                <FormMessage />
-              </FormItem>
+              <FormItem><FormLabel>Email Address</FormLabel><FormControl><Input type="email" {...field} /></FormControl><FormMessage /></FormItem>
             )} />
             <FormField control={form.control} name="phone" render={({ field }) => (
-              <FormItem>
-                <FormLabel>Phone Number (Optional)</FormLabel>
-                <FormControl><Input placeholder="e.g., +1 555-123-4567" {...field} /></FormControl>
-                <FormMessage />
-              </FormItem>
+              <FormItem><FormLabel>Phone Number (Optional)</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
             )} />
              <FormField control={form.control} name="note" render={({ field }) => (
-              <FormItem>
-                <FormLabel>Note (Optional)</FormLabel>
-                <FormControl><Textarea placeholder="Initial contact details, requirements, etc." {...field} /></FormControl>
-                <FormMessage />
-              </FormItem>
+              <FormItem><FormLabel>Note (Optional)</FormLabel><FormControl><Textarea {...field} /></FormControl><FormMessage /></FormItem>
             )} />
             <FormField control={form.control} name="status" render={({ field }) => (
               <FormItem>
-                <FormLabel>Initial Status</FormLabel>
+                <FormLabel>Status</FormLabel>
                 <Select onValueChange={field.onChange} defaultValue={field.value}>
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select a status" />
-                    </SelectTrigger>
-                  </FormControl>
+                  <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
                   <SelectContent>
                     {leadStatuses.map(status => (
                       <SelectItem key={status} value={status}>{status}</SelectItem>
@@ -119,7 +109,7 @@ export function AddLeadDialog({ isOpen, onOpenChange, onAddLead }: AddLeadDialog
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
               <Button type="submit" disabled={isSubmitting}>
                 {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Add Lead
+                Save Changes
               </Button>
             </DialogFooter>
           </form>

@@ -8,9 +8,12 @@ import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 
 interface LeadKanbanBoardProps {
   leads: Lead[];
+  onEditLead: (lead: Lead) => void;
+  onDeleteLead: (lead: Lead) => void;
+  onUpdateLeadStatus: (leadId: string, status: LeadStatus) => void;
 }
 
-export function LeadKanbanBoard({ leads }: LeadKanbanBoardProps) {
+export function LeadKanbanBoard({ leads, onEditLead, onDeleteLead, onUpdateLeadStatus }: LeadKanbanBoardProps) {
   const groupedLeads = React.useMemo(() => {
     const initialGroups: Record<LeadStatus, Lead[]> = {
       'New': [],
@@ -39,7 +42,13 @@ export function LeadKanbanBoard({ leads }: LeadKanbanBoardProps) {
             </div>
             <div className="space-y-3 p-1 h-[calc(100vh-250px)] overflow-y-auto rounded-md">
               {groupedLeads[status].map((lead) => (
-                <LeadCard key={lead.id} lead={lead} />
+                <LeadCard 
+                    key={lead.id} 
+                    lead={lead} 
+                    onEdit={onEditLead}
+                    onDelete={onDeleteLead}
+                    onUpdateStatus={onUpdateLeadStatus}
+                />
               ))}
               {groupedLeads[status].length === 0 && (
                 <div className="flex items-center justify-center h-24 border-2 border-dashed rounded-md text-muted-foreground">

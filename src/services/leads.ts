@@ -1,6 +1,6 @@
 
 import { db } from '@/lib/firebase';
-import { collection, addDoc, onSnapshot, query, serverTimestamp, doc, updateDoc, deleteDoc, Timestamp } from 'firebase/firestore';
+import { collection, addDoc, onSnapshot, query, serverTimestamp, doc, updateDoc, deleteDoc, Timestamp, orderBy } from 'firebase/firestore';
 
 export const leadStatuses = ['New', 'Active', 'Deal', 'Done'] as const;
 export type LeadStatus = typeof leadStatuses[number];
@@ -9,7 +9,8 @@ export interface Lead {
   id: string;
   name: string;
   email: string;
-  phone: string;
+  phone?: string;
+  note?: string;
   status: LeadStatus;
   createdAt: Date;
 }
@@ -34,7 +35,7 @@ export const addLead = async (userId: string, leadData: LeadData) => {
 export const getLeads = (userId: string, callback: (leads: Lead[]) => void) => {
     if (!userId) return () => {};
 
-    const q = query(collection(db, 'users', userId, 'leads'));
+    const q = query(collection(db, 'users', userId, 'leads'), orderBy('createdAt', 'desc'));
     
     const unsubscribe = onSnapshot(q, (querySnapshot) => {
         const leads: Lead[] = [];
@@ -64,17 +65,6 @@ export const updateLead = async (userId: string, leadId: string, data: Partial<L
         throw new Error("Failed to update lead.");
     }
 };
-
-export const updateLeadStatus = async (userId: string, leadId: string, status: LeadStatus) => {
-    if (!userId) throw new Error('User not logged in');
-    try {
-        const leadRef = doc(db, 'users', userId, 'leads', leadId);
-        await updateDoc(leadRef, { status });
-    } catch (error) {
-        console.error("Error updating lead status: ", error);
-        throw new Error("Failed to update lead status.");
-    }
-}
 
 export const deleteLead = async (userId: string, leadId: string) => {
     if (!userId) throw new Error('User not logged in');
