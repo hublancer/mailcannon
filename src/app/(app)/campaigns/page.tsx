@@ -39,15 +39,23 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+    DialogDescription,
+} from '@/components/ui/dialog';
 import { PageHeader } from '@/components/page-header';
 import { auth, db } from '@/lib/firebase';
-import { getCampaigns, deleteCampaign, updateCampaign, type Campaign } from '@/services/campaigns';
+import { getCampaigns, deleteCampaign, updateCampaign, logCampaignFailure, getCampaignFailures, type Campaign, type CampaignFailure } from '@/services/campaigns';
 import { getRecipientLists, getRecipientsForList, type RecipientList } from '@/services/recipients';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { sendCampaignEmail } from '@/app/actions/send-campaign-email';
 import { Progress } from '@/components/ui/progress';
 import { increment } from 'firebase/firestore';
+import { format } from 'date-fns';
 
 export default function CampaignsPage() {
   const [campaigns, setCampaigns] = React.useState<Campaign[]>([]);
@@ -58,6 +66,11 @@ export default function CampaignsPage() {
 
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = React.useState(false);
   const [deletingCampaign, setDeletingCampaign] = React.useState<Campaign | null>(null);
+
+  const [isFailuresDialogOpen, setIsFailuresDialogOpen] = React.useState(false);
+  const [currentFailures, setCurrentFailures] = React.useState<CampaignFailure[]>([]);
+  const [viewingFailuresFor, setViewingFailuresFor] = React.useState<Campaign | null>(null);
+  const [isLoadingFailures, setIsLoadingFailures] = React.useState(false);
 
   // --- State for the sending process ---
   const [activeCampaignId, setActiveCampaignId] = React.useState<string | null>(null);
@@ -100,10 +113,11 @@ export default function CampaignsPage() {
           smtpAccountId: campaign.smtpAccountId,
       });
 
-      const updateData = result.success 
-          ? { sentCount: increment(1) }
-          : { failedCount: increment(1) };
-      await updateCampaign(user.uid, campaign.id, updateData);
+      if (result.success) {
+        await updateCampaign(user.uid, campaign.id, { sentCount: increment(1) });
+      } else {
+        await logCampaignFailure(user.uid, campaign.id, recipient, result.error || 'Unknown error');
+      }
 
       // Note: The onSnapshot listener will trigger the next send after the state updates
   }, [user, toast]);
@@ -219,6 +233,23 @@ export default function CampaignsPage() {
 
   const getRecipientList = (listId: string) => recipientLists.find(l => l.id === listId);
 
+  const handleViewFailures = async (campaign: Campaign) => {
+    if (!user) return;
+    setViewingFailuresFor(campaign);
+    setIsLoadingFailures(true);
+    setIsFailuresDialogOpen(true);
+    try {
+        const failures = await getCampaignFailures(user.uid, campaign.id);
+        setCurrentFailures(failures);
+    } catch (error) {
+        toast({ variant: 'destructive', title: 'Error', description: 'Could not load failure details.' });
+        setIsFailuresDialogOpen(false);
+    } finally {
+        setIsLoadingFailures(false);
+    }
+  };
+
+
   return (
     <>
       <PageHeader
@@ -296,7 +327,7 @@ export default function CampaignsPage() {
                         </Badge>
                       </TableCell>
                       <TableCell>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-4">
                            <div className="w-28">
                             {campaign.status !== 'Draft' && campaign.status !== 'Scheduled' && totalRecipients > 0 ? (
                                 <Progress value={progress} className="h-2" />
@@ -304,9 +335,16 @@ export default function CampaignsPage() {
                                 <span className="text-muted-foreground text-xs">Not started</span>
                             )}
                            </div>
-                           <span className="text-muted-foreground text-xs">
-                             {totalProcessed} / {totalRecipients}
-                           </span>
+                           <div className="text-xs text-muted-foreground">
+                                <div>{sentCount} sent / {totalRecipients}</div>
+                                {failedCount > 0 ? (
+                                    <Button variant="link" className="h-auto p-0 text-destructive text-xs" onClick={() => handleViewFailures(campaign)}>
+                                        {failedCount} failed
+                                    </Button>
+                                ) : (
+                                    <div>0 failed</div>
+                                )}
+                           </div>
                         </div>
                       </TableCell>
                       <TableCell className="text-right">
@@ -377,6 +415,47 @@ export default function CampaignsPage() {
             </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog open={isFailuresDialogOpen} onOpenChange={setIsFailuresDialogOpen}>
+        <DialogContent className="max-w-3xl">
+            <DialogHeader>
+                <DialogTitle>Failure Report for "{viewingFailuresFor?.campaignName}"</DialogTitle>
+                <DialogDescription>
+                    The following recipients could not be reached.
+                </DialogDescription>
+            </DialogHeader>
+            {isLoadingFailures ? (
+                <div className="flex items-center justify-center p-10">
+                    <Loader2 className="h-8 w-8 animate-spin" />
+                </div>
+            ) : (
+                <div className="max-h-[60vh] overflow-y-auto">
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>Recipient</TableHead>
+                                <TableHead>Error Message</TableHead>
+                                <TableHead className="w-[180px]">Timestamp</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {currentFailures.length > 0 ? currentFailures.map((failure) => (
+                                <TableRow key={failure.id}>
+                                    <TableCell>{failure.recipient}</TableCell>
+                                    <TableCell className="text-xs">{failure.error}</TableCell>
+                                    <TableCell>{failure.timestamp ? format(failure.timestamp, 'Pp') : 'N/A'}</TableCell>
+                                </TableRow>
+                            )) : (
+                                <TableRow>
+                                    <TableCell colSpan={3} className="text-center">No failures to report.</TableCell>
+                                </TableRow>
+                            )}
+                        </TableBody>
+                    </Table>
+                </div>
+            )}
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
