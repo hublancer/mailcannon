@@ -125,7 +125,7 @@ export function AddRecipientListDialog({ isOpen, onOpenChange, onAddList }: AddR
 
   return (
     <Dialog open={isOpen} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-xl">
+      <DialogContent className="sm:max-w-xl h-[90vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>Add New Recipient List</DialogTitle>
           <DialogDescription>
@@ -133,7 +133,7 @@ export function AddRecipientListDialog({ isOpen, onOpenChange, onAddList }: AddR
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+          <form id="add-list-form" onSubmit={form.handleSubmit(onSubmit)} className="flex-grow overflow-y-auto pr-6 space-y-4">
             <FormField
               control={form.control}
               name="name"
@@ -225,18 +225,17 @@ export function AddRecipientListDialog({ isOpen, onOpenChange, onAddList }: AddR
                 )}
               </TabsContent>
             </Tabs>
-
-            <DialogFooter>
-               <Button type="button" variant="outline" onClick={() => handleOpenChange(false)} disabled={isSubmitting}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={isSubmitting || isParsing}>
-                {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Create List
-              </Button>
-            </DialogFooter>
           </form>
         </Form>
+        <DialogFooter className="pt-4 border-t shrink-0">
+           <Button type="button" variant="outline" onClick={() => handleOpenChange(false)} disabled={isSubmitting}>
+            Cancel
+          </Button>
+          <Button form="add-list-form" type="submit" disabled={isSubmitting || isParsing}>
+            {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Create List
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

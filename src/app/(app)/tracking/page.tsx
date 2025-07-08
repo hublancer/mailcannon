@@ -1,5 +1,6 @@
 'use client'
 
+import * as React from 'react';
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis, Tooltip } from 'recharts';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -19,47 +20,88 @@ import {
 } from '@/components/ui/table';
 import { PageHeader } from '@/components/page-header';
 import { ChartContainer, ChartTooltipContent } from '@/components/ui/chart';
-
-const kpiData = [
-  { title: 'Total Emails Sent (30d)', value: '1,250,432', change: '+12.5%' },
-  { title: 'Delivery Rate', value: '99.2%', change: '+0.1%' },
-  { title: 'Open Rate', value: '24.8%', change: '-1.2%' },
-  { title: 'Failed/Bounced', value: '0.8%', change: '-0.1%' },
-];
-
-const chartData = [
-  { date: '2024-07-01', sent: 4000, failed: 24 },
-  { date: '2024-07-02', sent: 3000, failed: 13 },
-  { date: '2024-07-03', sent: 2000, failed: 98 },
-  { date: '2024-07-04', sent: 2780, failed: 39 },
-  { date: '2024-07-05', sent: 1890, failed: 48 },
-  { date: '2024-07-06', sent: 2390, failed: 38 },
-  { date: '2024-07-07', sent: 3490, failed: 43 },
-];
-
-const recentActivity = [
-    { campaign: 'New Product Launch', status: 'Completed', sent: '5,000', failed: '32', timestamp: '3 days ago' },
-    { campaign: 'Weekly Newsletter', status: 'Completed', sent: '15,000', failed: '112', timestamp: '1 day ago' },
-    { campaign: 'Summer Sale 2024', status: 'In Progress', sent: '850/1200', failed: '5', timestamp: 'Ongoing' },
-    { campaign: 'Q3 Onboarding Series', status: 'Active', sent: 'Ongoing', failed: '2', timestamp: 'Ongoing' },
-]
+import { Loader2 } from 'lucide-react';
+import { auth } from '@/lib/firebase';
+import { getCampaigns, type Campaign } from '@/services/campaigns';
 
 export default function TrackingPage() {
+  const [campaigns, setCampaigns] = React.useState<Campaign[]>([]);
+  const [isLoading, setIsLoading] = React.useState(true);
+  const [user, setUser] = React.useState(auth.currentUser);
+
+  React.useEffect(() => {
+    const unsubscribeAuth = auth.onAuthStateChanged((user) => {
+      setUser(user);
+    });
+    return () => unsubscribeAuth();
+  }, []);
+
+  React.useEffect(() => {
+    if (user) {
+      setIsLoading(true);
+      const unsubscribe = getCampaigns(user.uid, (fetchedCampaigns) => {
+        setCampaigns(fetchedCampaigns);
+        setIsLoading(false);
+      });
+      return () => unsubscribe();
+    } else {
+      setCampaigns([]);
+      setIsLoading(false);
+    }
+  }, [user]);
+
+  const trackingData = React.useMemo(() => {
+    const totalSent = campaigns.reduce((acc, c) => acc + (c.sentCount || 0), 0);
+    const totalFailed = campaigns.reduce((acc, c) => acc + (c.failedCount || 0), 0);
+    const totalDeliveries = totalSent + totalFailed;
+
+    const kpiData = [
+      { title: 'Total Emails Sent', value: totalSent.toLocaleString() },
+      { title: 'Delivery Rate', value: totalDeliveries > 0 ? `${((totalSent / totalDeliveries) * 100).toFixed(1)}%` : 'N/A' },
+      { title: 'Failed/Bounced', value: totalDeliveries > 0 ? `${((totalFailed / totalDeliveries) * 100).toFixed(1)}%` : 'N/A' },
+    ];
+    
+    const recentCampaigns = campaigns.slice(0, 7);
+    const chartData = recentCampaigns.map(c => ({
+        name: c.campaignName.length > 15 ? `${c.campaignName.substring(0, 15)}...` : c.campaignName,
+        sent: c.sentCount || 0,
+        failed: c.failedCount || 0,
+    })).reverse();
+
+    const recentActivity = campaigns.slice(0, 4).map(c => ({
+        campaign: c.campaignName,
+        status: c.status,
+        sent: `${c.sentCount || 0}`,
+        failed: `${c.failedCount || 0}`,
+    }));
+
+    return { kpiData, chartData, recentActivity };
+  }, [campaigns]);
+
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[50vh]">
+        <Loader2 className="h-10 w-10 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+
   return (
     <>
       <PageHeader
         title="Tracking & Accuracy"
         description="Monitor send rates and failed deliveries for your campaigns."
       />
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-6">
-        {kpiData.map((kpi) => (
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 mb-6">
+        {trackingData.kpiData.map((kpi) => (
           <Card key={kpi.title}>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">{kpi.title}</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{kpi.value}</div>
-              <p className="text-xs text-muted-foreground">{kpi.change} from last month</p>
             </CardContent>
           </Card>
         ))}
@@ -67,9 +109,9 @@ export default function TrackingPage() {
       <div className="grid gap-6 md:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>Send Volume (Last 7 Days)</CardTitle>
+            <CardTitle>Recent Campaigns Performance</CardTitle>
             <CardDescription>
-              Volume of emails sent and failed over the last week.
+              Volume of emails sent and failed for your most recent campaigns.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -77,14 +119,13 @@ export default function TrackingPage() {
                 sent: { label: 'Sent', color: 'hsl(var(--primary))' },
                 failed: { label: 'Failed', color: 'hsl(var(--destructive))' },
             }}>
-              <BarChart data={chartData} accessibilityLayer>
+              <BarChart data={trackingData.chartData} accessibilityLayer margin={{ top: 20, right: 20, left: 0, bottom: 5 }}>
                 <CartesianGrid vertical={false} />
                 <XAxis
-                  dataKey="date"
+                  dataKey="name"
                   tickLine={false}
                   tickMargin={10}
                   axisLine={false}
-                  tickFormatter={(value) => new Date(value).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                 />
                 <YAxis />
                 <Tooltip content={<ChartTooltipContent />} />
@@ -102,28 +143,32 @@ export default function TrackingPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <Table>
-                <TableHeader>
-                    <TableRow>
-                        <TableHead>Campaign</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead>Sent</TableHead>
-                        <TableHead>Failed</TableHead>
-                    </TableRow>
-                </TableHeader>
-                <TableBody>
-                    {recentActivity.map(activity => (
-                        <TableRow key={activity.campaign}>
-                            <TableCell className="font-medium">{activity.campaign}</TableCell>
-                            <TableCell>
-                                <Badge variant={activity.status === 'Completed' ? 'secondary' : 'default'}>{activity.status}</Badge>
-                            </TableCell>
-                            <TableCell>{activity.sent}</TableCell>
-                            <TableCell className="text-destructive">{activity.failed}</TableCell>
+             {trackingData.recentActivity.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-8">No recent campaign activity.</p>
+             ) : (
+                <Table>
+                    <TableHeader>
+                        <TableRow>
+                            <TableHead>Campaign</TableHead>
+                            <TableHead>Status</TableHead>
+                            <TableHead>Sent</TableHead>
+                            <TableHead>Failed</TableHead>
                         </TableRow>
-                    ))}
-                </TableBody>
-            </Table>
+                    </TableHeader>
+                    <TableBody>
+                        {trackingData.recentActivity.map(activity => (
+                            <TableRow key={activity.campaign}>
+                                <TableCell className="font-medium">{activity.campaign}</TableCell>
+                                <TableCell>
+                                    <Badge variant={activity.status === 'Completed' ? 'secondary' : 'default'}>{activity.status}</Badge>
+                                </TableCell>
+                                <TableCell>{activity.sent}</TableCell>
+                                <TableCell className="text-destructive">{activity.failed}</TableCell>
+                            </TableRow>
+                        ))}
+                    </TableBody>
+                </Table>
+             )}
           </CardContent>
         </Card>
       </div>
