@@ -47,6 +47,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const isMobile = useIsMobile();
   const router = useRouter();
   const [isCheckingAuth, setIsCheckingAuth] = React.useState(true);
+  const [isMounted, setIsMounted] = React.useState(false);
+
+  React.useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   React.useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged(user => {
@@ -69,7 +74,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     }
   };
 
-  if (isCheckingAuth) {
+  if (isCheckingAuth || !isMounted) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-background">
         <Loader2 className="h-10 w-10 animate-spin text-primary" />
