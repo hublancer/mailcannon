@@ -23,7 +23,7 @@ import { db } from '@/lib/firebase';
 
 export default function AdminLoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState('admin@example.com');
+  const [email, setEmail] = useState('admin@hublancer.pk');
   const [password, setPassword] = useState('0300Ali$');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);

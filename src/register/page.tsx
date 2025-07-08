@@ -44,7 +44,7 @@ export default function RegisterPage() {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
       
-      const role = email === 'admin@example.com' ? 'admin' : 'user';
+      const role = email === 'admin@hublancer.pk' ? 'admin' : 'user';
       await createUserProfile(user.uid, user.email!, role);
       
       if (role === 'admin') {

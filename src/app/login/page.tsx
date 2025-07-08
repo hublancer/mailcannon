@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect, type FormEvent } from 'react';
@@ -21,8 +22,8 @@ import { auth } from '@/lib/firebase';
 
 export default function LoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState('admin@mailcannon.com');
-  const [password, setPassword] = useState('0300Ali$');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
@@ -92,7 +93,7 @@ export default function LoginPage() {
               <Input
                 id="email"
                 type="email"
-                placeholder="admin@mailcannon.com"
+                placeholder="you@example.com"
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
