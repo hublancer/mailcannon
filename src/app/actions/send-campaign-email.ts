@@ -33,14 +33,16 @@ export async function sendCampaignEmail(params: SendCampaignEmailParams) {
         const transporter = nodemailer.createTransport({
             host: smtpConfig.server,
             port: smtpConfig.port,
-            secure: smtpConfig.secure,
+            secure: smtpConfig.secure, // true for 465, false for other ports
             auth: {
                 user: smtpConfig.username,
-                pass: smtpConfig.password,
+                pass: smtpConfig.password, // IMPORTANT: Ensure password is included when fetching config
             },
+            // This setting is crucial for compatibility with many hosting providers
+            // like Hostinger who may use self-signed or non-standard SSL certificates.
             tls: {
                 rejectUnauthorized: false,
-                ciphers: 'SSLv3',
+                ciphers: 'SSLv3', // This is the key fix for Hostinger compatibility
             },
         });
 

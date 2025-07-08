@@ -40,7 +40,7 @@ import {
     AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { PageHeader } from '@/components/page-header';
-import { auth } from '@/lib/firebase';
+import { auth, db } from '@/lib/firebase';
 import { getCampaigns, deleteCampaign, updateCampaign, type Campaign } from '@/services/campaigns';
 import { getRecipientLists, getRecipientsForList, type RecipientList } from '@/services/recipients';
 import { useToast } from '@/hooks/use-toast';
@@ -48,7 +48,6 @@ import { cn } from '@/lib/utils';
 import { sendCampaignEmail } from '@/app/actions/send-campaign-email';
 import { Progress } from '@/components/ui/progress';
 import { getDoc, doc } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
 
 export default function CampaignsPage() {
   const [campaigns, setCampaigns] = React.useState<Campaign[]>([]);
@@ -75,47 +74,13 @@ export default function CampaignsPage() {
     return () => unsubscribeAuth();
   }, []);
 
-  React.useEffect(() => {
-    if (user) {
-      setIsLoading(true);
-      const unsubCampaigns = getCampaigns(user.uid, (fetchedCampaigns) => {
-        setCampaigns(fetchedCampaigns);
-        // If the active campaign is no longer 'Running', stop the loop.
-        const activeCampaign = fetchedCampaigns.find(c => c.id === activeCampaignId);
-        if (activeCampaign && activeCampaign.status !== 'Running') {
-            setActiveCampaignId(null);
-        }
-        setIsLoading(false);
-      });
-      const unsubRecipients = getRecipientLists(user.uid, setRecipientLists);
-      
-      return () => {
-        unsubCampaigns();
-        unsubRecipients();
-      };
-    } else {
-      setCampaigns([]);
-      setRecipientLists([]);
-      setIsLoading(false);
-    }
-  }, [user, activeCampaignId]);
-
-  // Cleanup timeout on unmount
-  React.useEffect(() => {
-    return () => {
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-      }
-    };
-  }, []);
-
   const sendNextEmail = React.useCallback(async (campaignId: string, recipientEmails: string[], currentIndex: number) => {
       if (!user) return;
 
-      // Use the ref to get the latest campaign data
+      // Use the ref to get the latest campaign data, which is updated by the onSnapshot listener
       const campaign = campaignsRef.current.find(c => c.id === campaignId);
 
-      // Stop if campaign is gone or no longer running
+      // Stop if campaign is gone, paused, completed, or otherwise not 'Running'
       if (!campaign || campaign.status !== 'Running') {
           setActiveCampaignId(null);
           if (timeoutRef.current) clearTimeout(timeoutRef.current);
@@ -154,9 +119,10 @@ export default function CampaignsPage() {
       const nextIndex = currentIndex + 1;
       if (nextIndex < recipientEmails.length) {
         let delay = 0;
+        // Calculate a randomized delay based on the hourly speed limit
         if (campaign.speedLimit > 0) {
             const avgDelay = (3600 * 1000) / campaign.speedLimit;
-            // Add jitter to the delay to appear more human
+            // Add jitter to the delay (+/- 25%) to appear more human
             delay = avgDelay * (0.75 + Math.random() * 0.5);
         }
         
@@ -167,6 +133,72 @@ export default function CampaignsPage() {
         toast({ title: 'Campaign Finished', description: `Campaign "${campaign.campaignName}" has completed.`});
       }
   }, [user, toast]);
+  
+  // This useEffect hook is responsible for starting and stopping the sending loop
+  // based on real-time data from Firestore.
+  React.useEffect(() => {
+    if (user) {
+      setIsLoading(true);
+      const unsubRecipients = getRecipientLists(user.uid, setRecipientLists);
+      
+      const unsubCampaigns = getCampaigns(user.uid, (fetchedCampaigns) => {
+        setCampaigns(fetchedCampaigns);
+        campaignsRef.current = fetchedCampaigns; // Keep the ref updated
+
+        const activeCampaign = fetchedCampaigns.find(c => c.id === activeCampaignId);
+        
+        // **START CONDITION**: If a campaign is active, its status is 'Running', and the loop isn't already going.
+        if (activeCampaign && activeCampaign.status === 'Running' && !timeoutRef.current) {
+            const startSendingProcess = async () => {
+                try {
+                    const recipients = await getRecipientsForList(user.uid, activeCampaign.recipientListId);
+                    const currentIndex = (activeCampaign.sentCount || 0) + (activeCampaign.failedCount || 0);
+
+                    if (recipients.length === 0) {
+                        toast({ variant: 'destructive', title: 'Error', description: 'Recipient list is empty.' });
+                        await updateCampaign(user.uid, activeCampaign.id, { status: 'Failed' });
+                        return;
+                    }
+                    if (currentIndex >= recipients.length) {
+                        toast({ title: 'Campaign Already Completed' });
+                        if (activeCampaign.status !== 'Completed') await updateCampaign(user.uid, activeCampaign.id, { status: 'Completed' });
+                        return;
+                    }
+                    
+                    // Start the sending loop. The first email is sent without delay inside sendNextEmail.
+                    sendNextEmail(activeCampaign.id, recipients, currentIndex);
+
+                } catch (error) {
+                    toast({ variant: 'destructive', title: 'Failed to start campaign', description: (error as Error).message });
+                    if (activeCampaign) await updateCampaign(user.uid, activeCampaign.id, { status: 'Failed' });
+                }
+            };
+            startSendingProcess();
+        }
+
+        // **STOP CONDITION**: If the active campaign is no longer in the 'Running' state.
+        if (activeCampaignId && (!activeCampaign || activeCampaign.status !== 'Running')) {
+            setActiveCampaignId(null);
+            if (timeoutRef.current) {
+                clearTimeout(timeoutRef.current);
+                timeoutRef.current = null;
+            }
+        }
+        setIsLoading(false);
+      });
+      
+      return () => {
+        unsubCampaigns();
+        unsubRecipients();
+        if (timeoutRef.current) clearTimeout(timeoutRef.current);
+      };
+    } else {
+      setCampaigns([]);
+      setRecipientLists([]);
+      setIsLoading(false);
+    }
+  }, [user, activeCampaignId, toast, sendNextEmail]);
+
 
   const handleStartCampaign = async (campaign: Campaign) => {
     if (!user) return;
@@ -175,38 +207,17 @@ export default function CampaignsPage() {
         return;
     }
     
-    try {
-        const recipients = await getRecipientsForList(user.uid, campaign.recipientListId);
-        if (recipients.length === 0) {
-            toast({ variant: 'destructive', title: 'Error', description: 'Recipient list is empty.' });
-            return;
-        }
-
-        const currentIndex = (campaign.sentCount || 0) + (campaign.failedCount || 0);
-        if (currentIndex >= recipients.length) {
-            toast({ title: 'Campaign Already Completed', description: 'This campaign has already been sent to all recipients.' });
-            if (campaign.status !== 'Completed') {
-                await updateCampaign(user.uid, campaign.id, { status: 'Completed' });
-            }
-            return;
-        }
-
-        await updateCampaign(user.uid, campaign.id, { status: 'Running' });
-        setActiveCampaignId(campaign.id);
-        toast({ title: 'Campaign Started!', description: `Campaign "${campaign.campaignName}" is now running.`});
-
-        // Start sending the first email immediately
-        sendNextEmail(campaign.id, recipients, currentIndex);
-
-    } catch (error) {
-        toast({ variant: 'destructive', title: 'Error', description: (error as Error).message || 'Could not start campaign.' });
-    }
+    // This just sets the intention. The useEffect will detect the state change and start the process.
+    await updateCampaign(user.uid, campaign.id, { status: 'Running' });
+    setActiveCampaignId(campaign.id);
+    toast({ title: 'Campaign Queued!', description: `"${campaign.campaignName}" is starting.`});
   };
 
   const handlePauseCampaign = async (campaign: Campaign) => {
     if (!user) return;
     if (timeoutRef.current) {
         clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
     }
     await updateCampaign(user.uid, campaign.id, { status: 'Paused' });
     setActiveCampaignId(null);
@@ -217,6 +228,7 @@ export default function CampaignsPage() {
     if (!user) return;
     if (timeoutRef.current) {
         clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
     }
     // Set a final status. We consider it 'Completed' as it's a manual final action.
     await updateCampaign(user.uid, campaign.id, { status: 'Completed' });
@@ -293,7 +305,7 @@ export default function CampaignsPage() {
                 {campaigns.map((campaign) => {
                   const list = getRecipientList(campaign.recipientListId);
                   const totalRecipients = list?.count || 0;
-                  const progress = totalRecipients > 0 ? ((campaign.sentCount + campaign.failedCount) / totalRecipients) * 100 : 0;
+                  const progress = totalRecipients > 0 ? (((campaign.sentCount || 0) + (campaign.failedCount || 0)) / totalRecipients) * 100 : 0;
                   const isCampaignRunning = activeCampaignId === campaign.id;
 
                   return (
@@ -327,7 +339,7 @@ export default function CampaignsPage() {
                             )}
                            </div>
                            <span className="text-muted-foreground text-xs">
-                             {campaign.sentCount + campaign.failedCount} / {totalRecipients}
+                             {(campaign.sentCount || 0) + (campaign.failedCount || 0)} / {totalRecipients}
                            </span>
                         </div>
                       </TableCell>
@@ -346,7 +358,7 @@ export default function CampaignsPage() {
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
                             <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                            { (campaign.status === 'Draft' || campaign.status === 'Paused' || campaign.status === 'Scheduled') && (
+                            { (campaign.status === 'Draft' || campaign.status === 'Paused' || campaign.status === 'Completed' && progress < 100) && (
                                 <DropdownMenuItem onSelect={() => handleStartCampaign(campaign)} disabled={activeCampaignId !== null}>
                                     <Play className="mr-2"/>
                                     {campaign.status === 'Paused' ? 'Resume' : 'Start'}
