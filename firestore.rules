@@ -3,41 +3,52 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-  
-    function isOwner(userId) {
-      return request.auth.uid == userId;
-    }
 
     function isAdmin() {
-      // Allow access if the user document has role 'admin'
+      // Check if the requesting user has the 'admin' role in their user document.
       return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
 
-    // Admins can read/write any document in any top-level collection
-    match /{collection}/{docId} {
-        allow read, write: if isAdmin();
-    }
-    
-    // Plans are public to read for any authenticated user
-    match /plans/{planId} {
-        allow get, list: if request.auth != null;
-    }
-    
-    // Users can read and write to their own user document
+    // --- USERS Collection ---
     match /users/{userId} {
-      allow read, update: if isOwner(userId);
-      // create is handled by a backend function (or registration), not directly by client
+      // Admins can list all users.
+      allow list: if isAdmin();
+
+      // A user can get their own profile. An admin can get any user's profile.
+      allow get: if request.auth.uid == userId || isAdmin();
+
+      // A user can update their own profile. An admin can update any user's profile (e.g., to activate a subscription).
+      allow update: if request.auth.uid == userId || isAdmin();
+
+      // Any authenticated user can create their own profile upon signup.
+      allow create: if request.auth.uid == userId;
+
+      // Deletion is not allowed from the client for safety.
+      allow delete: if false;
     }
-    
-    // Users can create payments for themselves
+
+    // --- PLANS Collection ---
+    match /plans/{planId} {
+      // Any authenticated user can read plans.
+      allow read: if request.auth != null;
+      // Only admins can create, update, or delete plans.
+      allow write: if isAdmin();
+    }
+
+    // --- PAYMENTS Collection ---
     match /payments/{paymentId} {
-        allow create: if isOwner(request.resource.data.userId);
-        // Only admins can read/update payment status
+      // Only admins can read, update, or delete payments.
+      allow read, update, delete: if isAdmin();
+      // Users can create their own payment submission.
+      allow create: if request.auth.uid == request.resource.data.userId;
     }
-    
-    // Users can manage their own subcollections
-    match /users/{userId}/{userCollection}/{docId} {
-      allow read, write, delete: if isOwner(userId);
+
+    // --- USER-SPECIFIC SUBCOLLECTIONS ---
+    // This rule allows a user to perform any action on any document
+    // within their own user document space (e.g., campaigns, recipients, smtpAccounts).
+    // The {document=**} wildcard matches any document in any subcollection recursively.
+    match /users/{userId}/{document=**} {
+      allow read, write, delete: if request.auth.uid == userId;
     }
   }
 }
