@@ -1,4 +1,3 @@
-
 'use client';
 
 import * as React from 'react';
@@ -39,7 +38,7 @@ const navItems = [
   { href: '/recipients', icon: Users, label: 'Recipients' },
   { href: '/smtp-accounts', icon: Server, label: 'SMTP Accounts' },
   { href: '/tracking', icon: LineChart, label: 'Tracking' },
-  { href: '/billing', icon: CreditCard, label: 'Billing' },
+  { href: '/billing', icon: CreditCard, label: 'Plans' },
 ];
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {

@@ -1,4 +1,3 @@
-
 'use client'
 
 import * as React from 'react';
@@ -75,7 +74,7 @@ export default function BillingPage() {
 
     return (
         <>
-            <PageHeader title="Billing & Plans" description="Manage your subscription and upgrade your plan." />
+            <PageHeader title="Plans" description="Manage your subscription and upgrade your plan." />
 
             <Card className="mb-8">
                 <CardHeader>
