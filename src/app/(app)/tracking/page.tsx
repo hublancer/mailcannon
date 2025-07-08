@@ -1,3 +1,4 @@
+
 'use client'
 
 import * as React from 'react';
@@ -69,6 +70,7 @@ export default function TrackingPage() {
     })).reverse();
 
     const recentActivity = campaigns.slice(0, 4).map(c => ({
+        id: c.id,
         campaign: c.campaignName,
         status: c.status,
         sent: `${c.sentCount || 0}`,
@@ -157,7 +159,7 @@ export default function TrackingPage() {
                     </TableHeader>
                     <TableBody>
                         {trackingData.recentActivity.map(activity => (
-                            <TableRow key={activity.campaign}>
+                            <TableRow key={activity.id}>
                                 <TableCell className="font-medium">{activity.campaign}</TableCell>
                                 <TableCell>
                                     <Badge variant={activity.status === 'Completed' ? 'secondary' : 'default'}>{activity.status}</Badge>
