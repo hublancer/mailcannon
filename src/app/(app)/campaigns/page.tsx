@@ -85,54 +85,8 @@ export default function CampaignsPage() {
     });
     return () => unsubscribeAuth();
   }, []);
-
-  const sendNextEmail = React.useCallback(async (campaignId: string, recipientEmails: string[]) => {
-      if (!user) return;
-      
-      const campaign = campaignsRef.current.find(c => c.id === campaignId);
-      if (!campaign || campaign.status !== 'Running') {
-          setActiveCampaignId(null);
-          return;
-      }
-
-      if (!campaign.emailVariants || campaign.emailVariants.length === 0) {
-        await updateCampaign(user.uid, campaign.id, { status: 'Failed' });
-        toast({ variant: 'destructive', title: 'Campaign Failed', description: `Campaign "${campaign.campaignName}" has no email content.`});
-        setActiveCampaignId(null);
-        return;
-      }
-      
-      const currentIndex = (campaign.sentCount || 0) + (campaign.failedCount || 0);
-
-      if (currentIndex >= recipientEmails.length) {
-          await updateCampaign(user.uid, campaign.id, { status: 'Completed' });
-          toast({ title: 'Campaign Finished', description: `Campaign "${campaign.campaignName}" has completed.`});
-          setActiveCampaignId(null);
-          return;
-      }
-
-      const recipient = recipientEmails[currentIndex];
-      const variant = campaign.emailVariants[currentIndex % campaign.emailVariants.length];
-
-      const result = await sendCampaignEmail({
-          to: recipient,
-          subject: variant.subject,
-          html: variant.body,
-          userId: user.uid,
-          smtpAccountId: campaign.smtpAccountId,
-      });
-
-      if (result.success) {
-        await updateCampaign(user.uid, campaign.id, { sentCount: increment(1) });
-      } else {
-        await logCampaignFailure(user.uid, campaign.id, recipient, result.error || 'Unknown error');
-      }
-
-      // Note: The onSnapshot listener will trigger the next send after the state updates
-  }, [user, toast]);
   
-  // This is the main effect that drives the campaign sending process.
-  // It listens for changes in campaigns and acts accordingly.
+  // This useEffect handles fetching all necessary data from Firestore
   React.useEffect(() => {
     if (!user) {
       setCampaigns([]);
@@ -146,48 +100,7 @@ export default function CampaignsPage() {
     
     const unsubCampaigns = getCampaigns(user.uid, (fetchedCampaigns) => {
       setCampaigns(fetchedCampaigns);
-      campaignsRef.current = fetchedCampaigns;
-      
-      const runningCampaign = fetchedCampaigns.find(c => c.status === 'Running');
-
-      if (runningCampaign) {
-          // A campaign is supposed to be running.
-          setActiveCampaignId(runningCampaign.id);
-          
-          if (timeoutRef.current) clearTimeout(timeoutRef.current);
-
-          // Calculate delay for the next email
-          let delay = 0; // Send immediately by default
-          const currentIndex = (runningCampaign.sentCount || 0) + (runningCampaign.failedCount || 0);
-          
-          if (currentIndex > 0 && runningCampaign.speedLimit > 0) {
-              const avgDelay = (3600 * 1000) / runningCampaign.speedLimit;
-              // Randomize delay to appear more human
-              delay = avgDelay * (0.75 + Math.random() * 0.5);
-          }
-
-          timeoutRef.current = setTimeout(async () => {
-              try {
-                  const recipients = await getRecipientsForList(user.uid, runningCampaign.recipientListId);
-                  if (currentIndex < recipients.length) {
-                      sendNextEmail(runningCampaign.id, recipients);
-                  } else if (recipients.length > 0) {
-                      // If we are at the end, mark as completed
-                      await updateCampaign(user.uid, runningCampaign.id, { status: 'Completed' });
-                      toast({ title: 'Campaign Finished', description: `Campaign "${runningCampaign.campaignName}" has completed.`});
-                  }
-              } catch (e) {
-                  toast({ variant: 'destructive', title: 'Error processing campaign', description: (e as Error).message });
-                  await updateCampaign(user.uid, runningCampaign.id, { status: 'Failed' });
-              }
-          }, delay);
-
-      } else {
-        // No campaign is running, so clear the active state and any pending timeouts.
-        if (timeoutRef.current) clearTimeout(timeoutRef.current);
-        timeoutRef.current = null;
-        setActiveCampaignId(null);
-      }
+      campaignsRef.current = fetchedCampaigns; // Keep ref updated for the runner
       setIsLoading(false);
     });
     
@@ -196,7 +109,88 @@ export default function CampaignsPage() {
       unsubRecipients();
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
     };
-  }, [user, sendNextEmail, toast]);
+  }, [user]);
+
+  // This useEffect is the campaign runner. It triggers when campaign data changes.
+  React.useEffect(() => {
+    if (!user) return;
+
+    const campaignToRun = campaigns.find(c => c.status === 'Running');
+
+    if (campaignToRun) {
+        setActiveCampaignId(campaignToRun.id);
+
+        const runNextStep = async () => {
+            // Use the ref to get the absolute latest campaign data inside the async timeout
+            const currentCampaign = campaignsRef.current.find(c => c.id === campaignToRun.id);
+            
+            // Stop conditions
+            if (!currentCampaign || currentCampaign.status !== 'Running') {
+                setActiveCampaignId(null);
+                return;
+            }
+            if (!user) return; // user logged out
+
+            try {
+                const recipients = await getRecipientsForList(user.uid, currentCampaign.recipientListId);
+                const currentIndex = (currentCampaign.sentCount || 0) + (currentCampaign.failedCount || 0);
+
+                // Check if campaign is finished
+                if (currentIndex >= recipients.length) {
+                    await updateCampaign(user.uid, currentCampaign.id, { status: 'Completed' });
+                    toast({ title: 'Campaign Finished', description: `Campaign "${currentCampaign.campaignName}" has completed.` });
+                    return; // End of loop
+                }
+
+                // Prepare and send the next email
+                const recipient = recipients[currentIndex];
+                if (!currentCampaign.emailVariants || currentCampaign.emailVariants.length === 0) {
+                  throw new Error("Campaign has no email variants.");
+                }
+                const variant = currentCampaign.emailVariants[Math.floor(Math.random() * currentCampaign.emailVariants.length)];
+
+                const result = await sendCampaignEmail({
+                    to: recipient,
+                    subject: variant.subject,
+                    html: variant.body,
+                    userId: user.uid,
+                    smtpAccountId: currentCampaign.smtpAccountId,
+                });
+
+                // Update Firestore based on result. This will trigger the useEffect to run again.
+                if (result.success) {
+                    await updateCampaign(user.uid, currentCampaign.id, { sentCount: increment(1) });
+                } else {
+                    await logCampaignFailure(user.uid, currentCampaign.id, recipient, result.error || 'Unknown error');
+                }
+            } catch (e) {
+                toast({ variant: 'destructive', title: 'Error processing campaign', description: (e as Error).message });
+                if (user) await updateCampaign(user.uid, campaignToRun.id, { status: 'Failed' });
+            }
+        };
+
+        // Calculate delay and schedule the next step
+        let delay = 0;
+        const currentIndex = (campaignToRun.sentCount || 0) + (campaignToRun.failedCount || 0);
+        if (currentIndex > 0 && campaignToRun.speedLimit > 0) {
+            const avgDelay = (3600 * 1000) / campaignToRun.speedLimit;
+            // Randomize delay to appear more human
+            delay = avgDelay * (0.75 + Math.random() * 0.5);
+        }
+
+        if (timeoutRef.current) clearTimeout(timeoutRef.current);
+        timeoutRef.current = setTimeout(runNextStep, delay);
+
+    } else {
+        // No campaign is running
+        setActiveCampaignId(null);
+    }
+    
+    // Cleanup timeout if the effect re-runs or component unmounts
+    return () => {
+        if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    }
+  }, [campaigns, user, toast]);
 
 
   const handleStartCampaign = async (campaign: Campaign) => {
