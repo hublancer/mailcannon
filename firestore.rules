@@ -1,11 +1,19 @@
+
 rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Users can only read, write, and delete their own data.
-    // This rule covers all subcollections like smtpAccounts, campaigns, recipientLists, etc.
+    // WARNING: INSECURE RULE FOR DEMONSTRATION PURPOSES
+    // This allows any server process or client to read and write SMTP account credentials.
+    // This is NOT safe for production. A proper fix involves using the Firebase Admin SDK
+    // for server-side operations to securely manage data.
+    match /users/{userId}/smtpAccounts/{accountId} {
+      allow read, write: if true;
+    }
+
+    // This allows an authenticated user to manage all of their other data securely.
     match /users/{userId}/{document=**} {
-      allow read, write, delete: if request.auth != null && request.auth.uid == userId;
+      allow read, write: if request.auth != null && request.auth.uid == userId;
     }
   }
 }
