@@ -198,8 +198,10 @@ export default function NewCampaignPage() {
                                             <div className="flex justify-between w-full pr-4 items-center">
                                                 <span>Variant {index + 1}</span>
                                                 {fields.length > 1 && (
-                                                    <Button variant="ghost" size="icon" type="button" onClick={(e) => { e.stopPropagation(); remove(index); }} className="h-8 w-8">
-                                                        <Trash2 className="h-4 w-4 text-destructive"/>
+                                                    <Button asChild variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); remove(index); }} className="h-8 w-8">
+                                                        <div>
+                                                            <Trash2 className="h-4 w-4 text-destructive"/>
+                                                        </div>
                                                     </Button>
                                                 )}
                                             </div>
