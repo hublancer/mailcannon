@@ -4,55 +4,48 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Helper functions
+    // --- Helper Functions ---
     function isOwner(userId) {
-      return request.auth.uid == userId;
+      // Checks if the requesting user is the owner of the document.
+      return request.auth != null && request.auth.uid == userId;
     }
 
     function isAdmin() {
-      // Securely check if the currently authenticated user has the 'admin' role.
-      return exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      // Checks if the requesting user has the 'admin' role in their user profile.
+      return request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
 
-    // --- Top-Level Collection Rules ---
-
-    // Rules for the 'users' collection
+    // --- Collection: users ---
     match /users/{userId} {
-      // A user can read and update their own profile.
-      // Admins can read any user profile.
-      allow get: if isOwner(userId) || isAdmin();
-      allow update: if isOwner(userId);
-      // Only admins can list all users for the admin panel.
-      allow list: if isAdmin();
-      // Admins can delete users (e.g., for banning).
-      allow delete: if isAdmin();
-      // User creation is handled by a backend function on registration.
-      allow create: if request.auth != null;
+      // Admins can list and view any user profile.
+      allow list, get: if isAdmin();
+      // Users can view and update their own profile.
+      allow get, update: if isOwner(userId);
     }
 
-    // Rules for the 'plans' collection
+    // --- Collection: plans ---
     match /plans/{planId} {
-      // Any authenticated user can read the list of plans.
-      allow get, list: if request.auth != null;
-      // Only admins can create, update, or delete plans.
-      allow write, delete: if isAdmin();
+      // Admins can perform any action on plans.
+      allow read, write: if isAdmin();
+      // Authenticated users can view the list of available plans.
+      allow list, get: if request.auth != null;
     }
 
-    // Rules for the 'payments' collection
+    // --- Collection: payments ---
     match /payments/{paymentId} {
-        // A user can create a payment submission for themselves.
-        allow create: if isOwner(request.resource.data.userId);
-        // Admins can read, list, and update all payments.
-        allow get, list, update: if isAdmin();
+      // Admins can list, view, and update any payment.
+      allow list, get, update: if isAdmin();
+      // Users can create their own payment submission.
+      allow create: if isOwner(request.resource.data.userId);
     }
-
-    // --- User Sub-collection Rules ---
-    // This single rule secures all data nested under a user's document.
-    match /users/{userId}/{path=**} {
-      // A user can perform any action on their own nested data.
-      // Admins can also access this data for support or management.
-      allow read, write, delete: if isOwner(userId) || isAdmin();
+    
+    // --- User Sub-collections ---
+    // This rule covers all of a user's private data like campaigns, recipients, etc.
+    match /users/{userId}/{userCollection}/{docId} {
+      // Users can fully manage their own sub-collection documents.
+      allow read, write, create, delete: if isOwner(userId);
+      // Admins can read any user's sub-collection data for support/management.
+      allow get, list: if isAdmin();
     }
   }
 }
