@@ -4,6 +4,7 @@
 import { db } from '@/lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import nodemailer from 'nodemailer';
+import type { SmtpAccountData } from '@/services/smtp';
 
 interface SendCampaignEmailParams {
     to: string;
@@ -46,7 +47,7 @@ export async function sendCampaignEmail(params: SendCampaignEmailParams) {
             // like Hostinger who may use self-signed or non-standard SSL certificates.
             tls: {
                 rejectUnauthorized: false,
-                ciphers: 'SSLv3', // This is the key fix for Hostinger compatibility
+                ciphers: 'SSLv3', 
             },
         });
 
