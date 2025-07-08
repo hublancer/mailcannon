@@ -8,8 +8,18 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { PageHeader } from '@/components/page-header';
 import { Loader2, ArrowLeft, Trash2, UserPlus } from 'lucide-react';
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { auth } from '@/lib/firebase';
-import { getRecipientList, getRecipients, type RecipientList, type Recipient } from '@/services/recipients';
+import { getRecipientList, getRecipients, deleteRecipientList, type RecipientList, type Recipient } from '@/services/recipients';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 
@@ -23,6 +33,7 @@ export default function ManageRecipientListPage() {
   const [isLoading, setIsLoading] = React.useState(true);
   const [user, setUser] = React.useState(auth.currentUser);
   const { toast } = useToast();
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = React.useState(false);
 
   React.useEffect(() => {
     const unsubscribeAuth = auth.onAuthStateChanged((user) => {
@@ -52,6 +63,20 @@ export default function ManageRecipientListPage() {
       };
     }
   }, [user, listId]);
+
+  const handleDeleteList = async () => {
+    if (!user || !list) return;
+    try {
+        await deleteRecipientList(user.uid, list.id);
+        toast({ title: 'Success!', description: `List "${list.name}" has been deleted.` });
+        router.push('/recipients');
+    } catch (error) {
+        toast({ variant: 'destructive', title: 'Error', description: (error as Error).message });
+    } finally {
+        setIsDeleteDialogOpen(false);
+    }
+  };
+
 
   if (isLoading) {
     return (
@@ -88,7 +113,7 @@ export default function ManageRecipientListPage() {
                 <UserPlus className="mr-2 h-4 w-4" />
                 Add Recipients
             </Button>
-            <Button variant="destructive" disabled>
+            <Button variant="destructive" onClick={() => setIsDeleteDialogOpen(true)}>
                 <Trash2 className="mr-2 h-4 w-4" />
                 Delete List
             </Button>
@@ -131,6 +156,25 @@ export default function ManageRecipientListPage() {
             )}
         </CardContent>
       </Card>
+
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent>
+            <AlertDialogHeader>
+                <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                <AlertDialogDescription>
+                    This action cannot be undone. This will permanently delete the recipient list
+                    <span className="font-semibold">{` "${list?.name}" `}</span>
+                    and all of its recipients.
+                </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={handleDeleteList} className="text-destructive-foreground bg-destructive hover:bg-destructive/90">
+                    Yes, delete list
+                </AlertDialogAction>
+            </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }

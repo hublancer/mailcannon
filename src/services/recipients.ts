@@ -1,6 +1,6 @@
 
 import { db } from '@/lib/firebase';
-import { collection, addDoc, onSnapshot, query, serverTimestamp, writeBatch, doc, getDocs, Timestamp, orderBy } from 'firebase/firestore';
+import { collection, addDoc, onSnapshot, query, serverTimestamp, writeBatch, doc, getDocs, Timestamp, orderBy, updateDoc, deleteDoc } from 'firebase/firestore';
 
 export interface RecipientList {
     id: string;
@@ -120,3 +120,33 @@ export const getRecipientsForList = async (userId: string, listId: string): Prom
         throw new Error("Failed to fetch recipients.");
     }
 }
+
+export const updateRecipientList = async (userId: string, listId: string, data: { name: string; description: string }) => {
+    if (!userId) throw new Error('User not logged in');
+    const listRef = doc(db, 'users', userId, 'recipientLists', listId);
+    await updateDoc(listRef, data);
+};
+
+export const deleteRecipientList = async (userId: string, listId: string) => {
+    if (!userId) throw new Error('User not logged in');
+
+    const batch = writeBatch(db);
+    const listRef = doc(db, 'users', userId, 'recipientLists', listId);
+    const recipientsColRef = collection(db, 'users', userId, 'recipientLists', listId, 'recipients');
+    
+    try {
+        // Delete all recipient documents in the subcollection
+        const recipientsSnapshot = await getDocs(recipientsColRef);
+        recipientsSnapshot.forEach((doc) => {
+            batch.delete(doc.ref);
+        });
+
+        // Delete the main list document
+        batch.delete(listRef);
+
+        await batch.commit();
+    } catch (error) {
+        console.error("Error deleting recipient list: ", error);
+        throw new Error("Failed to delete recipient list and its recipients.");
+    }
+};
