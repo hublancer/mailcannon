@@ -3,7 +3,7 @@
 
 import * as React from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { z } from 'zod';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -51,6 +51,9 @@ type FormValues = z.infer<typeof formSchema>;
 
 export default function NewCampaignPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const recipientListIdFromQuery = searchParams.get('recipientListId');
+
   const { toast } = useToast();
   const [user, setUser] = React.useState(auth.currentUser);
   const [smtpAccounts, setSmtpAccounts] = React.useState<SmtpAccount[]>([]);
@@ -66,6 +69,7 @@ export default function NewCampaignPage() {
       emailSubject: '',
       emailBody: '',
       scheduleSend: false,
+      recipientListId: recipientListIdFromQuery ?? undefined,
       speedLimit: 0,
     },
   });
@@ -219,7 +223,7 @@ export default function NewCampaignPage() {
                                 render={({ field }) => (
                                     <FormItem>
                                     <FormLabel>Recipient List</FormLabel>
-                                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                    <Select onValueChange={field.onChange} value={field.value} defaultValue={field.value}>
                                         <FormControl>
                                         <SelectTrigger>
                                             <SelectValue placeholder="Select a list" />

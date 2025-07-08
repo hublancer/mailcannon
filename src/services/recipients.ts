@@ -1,12 +1,18 @@
 
 import { db } from '@/lib/firebase';
-import { collection, addDoc, onSnapshot, query, serverTimestamp, writeBatch, doc, getDocs } from 'firebase/firestore';
+import { collection, addDoc, onSnapshot, query, serverTimestamp, writeBatch, doc, getDocs, Timestamp, orderBy } from 'firebase/firestore';
 
 export interface RecipientList {
     id: string;
     name: string;
     description: string;
     count: number;
+}
+
+export interface Recipient {
+    id: string;
+    email: string;
+    addedAt: Date;
 }
 
 export const addRecipientList = async (userId: string, listData: { name: string, description: string, emails: string[] }) => {
@@ -61,6 +67,47 @@ export const getRecipientLists = (userId: string, callback: (lists: RecipientLis
 
     return unsubscribe;
 };
+
+export const getRecipientList = (userId: string, listId: string, callback: (list: RecipientList | null) => void) => {
+    if (!userId || !listId) return () => {};
+    const listDocRef = doc(db, 'users', userId, 'recipientLists', listId);
+    
+    const unsubscribe = onSnapshot(listDocRef, (docSnap) => {
+        if (docSnap.exists()) {
+            callback({ id: docSnap.id, ...docSnap.data() } as RecipientList);
+        } else {
+            callback(null);
+        }
+    }, (error) => {
+        console.error("Error fetching recipient list details: ", error);
+        callback(null);
+    });
+    
+    return unsubscribe;
+}
+
+export const getRecipients = (userId: string, listId: string, callback: (recipients: Recipient[]) => void) => {
+    if (!userId || !listId) return () => {};
+    const recipientsColRef = collection(db, 'users', userId, 'recipientLists', listId, 'recipients');
+    const q = query(recipientsColRef, orderBy('addedAt', 'desc'));
+
+    const unsubscribe = onSnapshot(q, (querySnapshot) => {
+        const recipients: Recipient[] = [];
+        querySnapshot.forEach((doc) => {
+            const data = doc.data();
+            recipients.push({
+                id: doc.id,
+                email: data.email,
+                addedAt: (data.addedAt as Timestamp)?.toDate()
+            } as Recipient)
+        });
+        callback(recipients);
+    }, (error) => {
+        console.error("Error fetching recipients: ", error);
+    });
+
+    return unsubscribe;
+}
 
 export const getRecipientsForList = async (userId: string, listId: string): Promise<string[]> => {
     if (!userId || !listId) return [];

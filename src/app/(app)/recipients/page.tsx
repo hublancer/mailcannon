@@ -1,6 +1,8 @@
+
 'use client';
 
 import * as React from 'react';
+import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { PageHeader } from '@/components/page-header';
@@ -100,8 +102,12 @@ export default function RecipientsPage() {
                 <p className="text-sm text-muted-foreground">{list.description || 'No description provided.'}</p>
               </CardContent>
               <CardFooter className="flex justify-end space-x-2">
-                <Button variant="outline">Manage</Button>
-                <Button>Send To</Button>
+                <Button variant="outline" asChild>
+                  <Link href={`/recipients/${list.id}`}>Manage</Link>
+                </Button>
+                <Button asChild>
+                  <Link href={`/campaigns/new?recipientListId=${list.id}`}>Send To</Link>
+                </Button>
               </CardFooter>
             </Card>
           ))}
