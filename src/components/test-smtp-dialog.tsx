@@ -29,7 +29,7 @@ export function TestSmtpDialog({ isOpen, onOpenChange, onSendTest }: TestSmtpDia
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      email: '',
+      email: 'test@example.com',
     },
   });
 

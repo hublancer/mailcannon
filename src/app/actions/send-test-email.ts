@@ -51,9 +51,9 @@ export async function sendTestEmail({ smtpAccountId, toEmail }: SendTestEmailPar
         await transporter.sendMail({
             from: `"${smtpConfig.username}" <${smtpConfig.username}>`,
             to: toEmail,
-            subject: 'MailCannon - SMTP Connection Test',
-            text: 'Success! This is a test email from your MailCannon application to confirm your SMTP settings are working correctly.',
-            html: '<p><b>Success!</b></p><p>This is a test email from your MailCannon application to confirm your SMTP settings are working correctly.</p>',
+            subject: 'MailCannon Test: Your SMTP Connection is Working!',
+            text: 'Congratulations! This email confirms that your SMTP settings are configured correctly in MailCannon. You are ready to start sending campaigns.',
+            html: '<h1>Congratulations!</h1><p>This email confirms that your <strong>SMTP settings are configured correctly</strong> in MailCannon.</p><p>You are ready to start sending campaigns.</p>',
         });
 
         // Update the account status to 'Connected' in Firestore
