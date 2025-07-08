@@ -1,3 +1,4 @@
+
 'use client';
 
 import * as React from 'react';
@@ -8,17 +9,17 @@ import { generateEmailContent, type GenerateEmailContentInput, type GenerateEmai
 interface AIGeneratorDialogProps {
     isOpen: boolean;
     onOpenChange: (isOpen: boolean) => void;
-    onContentSelect: (content: { subject: string; body: string }) => void;
+    onApplyVariants: (variants: { subject: string; body: string }[]) => void;
 }
 
-export function AIGeneratorDialog({ isOpen, onOpenChange, onContentSelect }: AIGeneratorDialogProps) {
-    async function generate(input: GenerateEmailContentInput) {
+export function AIGeneratorDialog({ isOpen, onOpenChange, onApplyVariants }: AIGeneratorDialogProps) {
+    async function generate(input: GenerateEmailContentInput): Promise<GenerateEmailContentOutput | undefined> {
         // The 'use server' directive is in the flow file itself
         return await generateEmailContent(input);
     }
     
-    const handleSelect = (content: { subject: string; body: string }) => {
-        onContentSelect(content);
+    const handleApply = (variants: { subject: string; body: string }[]) => {
+        onApplyVariants(variants);
         onOpenChange(false);
     }
 
@@ -32,7 +33,7 @@ export function AIGeneratorDialog({ isOpen, onOpenChange, onContentSelect }: AIG
                     </DialogDescription>
                 </DialogHeader>
                 <div className="flex-grow overflow-hidden">
-                    <AIGeneratorForm generate={generate} onContentSelect={handleSelect} />
+                    <AIGeneratorForm generate={generate} onApplyVariants={handleApply} />
                 </div>
             </DialogContent>
         </Dialog>

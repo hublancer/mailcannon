@@ -94,6 +94,13 @@ export default function CampaignsPage() {
           setActiveCampaignId(null);
           return;
       }
+
+      if (!campaign.emailVariants || campaign.emailVariants.length === 0) {
+        await updateCampaign(user.uid, campaign.id, { status: 'Failed' });
+        toast({ variant: 'destructive', title: 'Campaign Failed', description: `Campaign "${campaign.campaignName}" has no email content.`});
+        setActiveCampaignId(null);
+        return;
+      }
       
       const currentIndex = (campaign.sentCount || 0) + (campaign.failedCount || 0);
 
@@ -105,10 +112,12 @@ export default function CampaignsPage() {
       }
 
       const recipient = recipientEmails[currentIndex];
+      const variant = campaign.emailVariants[currentIndex % campaign.emailVariants.length];
+
       const result = await sendCampaignEmail({
           to: recipient,
-          subject: campaign.emailSubject,
-          html: campaign.emailBody,
+          subject: variant.subject,
+          html: variant.body,
           userId: user.uid,
           smtpAccountId: campaign.smtpAccountId,
       });

@@ -5,10 +5,9 @@ import { collection, addDoc, onSnapshot, query, orderBy, serverTimestamp, Timest
 export interface Campaign {
   id: string;
   campaignName: string;
-  emailSubject: string;
   smtpAccountId: string;
   recipientListId: string;
-  emailBody: string;
+  emailVariants: { subject: string; body: string; }[];
   scheduleSend: boolean;
   scheduledAt: Date | null;
   speedLimit: number; // Max emails per hour

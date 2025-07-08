@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState } from 'react';
@@ -55,10 +56,10 @@ type FormValues = z.infer<typeof formSchema>;
 
 interface AIGeneratorFormProps {
   generate: (input: FormValues) => Promise<GenerateEmailContentOutput | undefined>;
-  onContentSelect?: (content: { subject: string; body: string }) => void;
+  onApplyVariants?: (variants: { subject: string; body: string }[]) => void;
 }
 
-export function AIGeneratorForm({ generate, onContentSelect }: AIGeneratorFormProps) {
+export function AIGeneratorForm({ generate, onApplyVariants }: AIGeneratorFormProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [generatedContent, setGeneratedContent] = useState<GenerateEmailContentOutput | null>(null);
 
@@ -214,25 +215,29 @@ export function AIGeneratorForm({ generate, onContentSelect }: AIGeneratorFormPr
             </div>
           )}
            {generatedContent && (
-            <ScrollArea className="h-full pr-4">
-              <Accordion type="single" collapsible className="w-full">
-                {generatedContent.emailVersions.map((version, index) => (
-                  <AccordionItem value={`item-${index}`} key={index}>
-                    <AccordionTrigger>Version {index + 1}: {version.subject}</AccordionTrigger>
-                    <AccordionContent>
-                      <div className="prose prose-sm dark:prose-invert max-w-none whitespace-pre-wrap p-4 bg-secondary rounded-md mb-4">
-                          {version.body}
-                      </div>
-                      {onContentSelect && (
-                          <Button onClick={() => onContentSelect(version)}>
-                              Use This Content
-                          </Button>
-                      )}
-                    </AccordionContent>
-                  </AccordionItem>
-                ))}
-              </Accordion>
-            </ScrollArea>
+            <div className="flex flex-col h-full">
+                <ScrollArea className="flex-1 pr-4">
+                <Accordion type="single" collapsible className="w-full" defaultValue="item-0">
+                    {generatedContent.emailVersions.map((version, index) => (
+                    <AccordionItem value={`item-${index}`} key={index}>
+                        <AccordionTrigger>Version {index + 1}: {version.subject}</AccordionTrigger>
+                        <AccordionContent>
+                        <div className="prose prose-sm dark:prose-invert max-w-none whitespace-pre-wrap p-4 bg-secondary rounded-md mb-4">
+                            {version.body}
+                        </div>
+                        </AccordionContent>
+                    </AccordionItem>
+                    ))}
+                </Accordion>
+                </ScrollArea>
+                <div className="pt-4">
+                {onApplyVariants && (
+                    <Button onClick={() => onApplyVariants(generatedContent.emailVersions)} className="w-full">
+                        Apply All {generatedContent.emailVersions.length} Variants
+                    </Button>
+                )}
+                </div>
+            </div>
           )}
         </CardContent>
       </Card>

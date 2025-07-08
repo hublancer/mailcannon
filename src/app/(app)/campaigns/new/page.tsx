@@ -2,13 +2,12 @@
 'use client';
 
 import * as React from 'react';
-import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { z } from 'zod';
-import { useForm } from 'react-hook-form';
+import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { format } from 'date-fns';
-import { CalendarIcon, Wand2, Loader2 } from 'lucide-react';
+import { CalendarIcon, Wand2, Loader2, Trash2, PlusCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
@@ -18,6 +17,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { PageHeader } from '@/components/page-header';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
@@ -29,10 +29,12 @@ import { AIGeneratorDialog } from '@/components/ai-generator-dialog';
 
 const formSchema = z.object({
   campaignName: z.string().min(3, 'Campaign name must be at least 3 characters.'),
-  emailSubject: z.string().min(5, 'Email subject must be at least 5 characters.'),
   smtpAccountId: z.string({ required_error: 'Please select an SMTP account.' }),
   recipientListId: z.string({ required_error: 'Please select a recipient list.' }),
-  emailBody: z.string().min(20, 'Email body must be at least 20 characters.'),
+  emailVariants: z.array(z.object({
+    subject: z.string().min(5, 'Email subject must be at least 5 characters.'),
+    body: z.string().min(20, 'Email body must be at least 20 characters.'),
+  })).min(1, 'You must have at least one email variant.'),
   scheduleSend: z.boolean().default(false),
   scheduledAtDate: z.date().optional(),
   scheduledAtTime: z.string().optional(),
@@ -66,12 +68,16 @@ export default function NewCampaignPage() {
     resolver: zodResolver(formSchema),
     defaultValues: {
       campaignName: '',
-      emailSubject: '',
-      emailBody: '',
       scheduleSend: false,
       recipientListId: recipientListIdFromQuery ?? undefined,
       speedLimit: 0,
+      emailVariants: [{ subject: '', body: '' }],
     },
+  });
+
+  const { fields, append, remove, replace } = useFieldArray({
+    control: form.control,
+    name: "emailVariants"
   });
 
   React.useEffect(() => {
@@ -152,7 +158,7 @@ export default function NewCampaignPage() {
                     <Card>
                         <CardHeader>
                             <CardTitle>Campaign Details</CardTitle>
-                            <CardDescription>Give your campaign a name and a compelling subject line.</CardDescription>
+                            <CardDescription>Give your campaign a name.</CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-4">
                              <FormField
@@ -168,45 +174,83 @@ export default function NewCampaignPage() {
                                     </FormItem>
                                 )}
                                 />
-                             <FormField
-                                control={form.control}
-                                name="emailSubject"
-                                render={({ field }) => (
-                                    <FormItem>
-                                    <FormLabel>Email Subject</FormLabel>
-                                    <FormControl>
-                                        <Input placeholder="What's new this month at Acme Corp" {...field} />
-                                    </FormControl>
-                                    <FormMessage />
-                                    </FormItem>
-                                )}
-                                />
                         </CardContent>
                     </Card>
 
                      <Card>
                         <CardHeader>
-                            <CardTitle>Email Content</CardTitle>
-                            <CardDescription>Write your email message below. Use markdown for formatting.</CardDescription>
+                            <div className="flex justify-between items-center">
+                                <div>
+                                    <CardTitle>Email Content</CardTitle>
+                                    <CardDescription>Create one or more email variants for this campaign.</CardDescription>
+                                </div>
+                                <Button variant="outline" type="button" onClick={() => setIsAiDialogOpen(true)}>
+                                    <Wand2 className="mr-2" />
+                                    Generate with AI
+                                </Button>
+                            </div>
                         </CardHeader>
                         <CardContent>
-                             <FormField
-                                control={form.control}
-                                name="emailBody"
-                                render={({ field }) => (
-                                    <FormItem>
-                                    <FormLabel>Email Body</FormLabel>
-                                    <FormControl>
-                                        <Textarea placeholder="Hi {{firstName}}, ..." className="min-h-[300px]" {...field} />
-                                    </FormControl>
-                                    <FormMessage />
-                                    </FormItem>
-                                )}
-                                />
-                            <Button variant="outline" type="button" className="mt-4" onClick={() => setIsAiDialogOpen(true)}>
-                                <Wand2 className="mr-2" />
-                                Generate with AI
+                            <Accordion type="single" collapsible className="w-full" defaultValue="item-0">
+                                {fields.map((field, index) => (
+                                    <AccordionItem value={`item-${index}`} key={field.id}>
+                                        <AccordionTrigger>
+                                            <div className="flex justify-between w-full pr-4 items-center">
+                                                <span>Variant {index + 1}</span>
+                                                {fields.length > 1 && (
+                                                    <Button variant="ghost" size="icon" type="button" onClick={(e) => { e.stopPropagation(); remove(index); }} className="h-8 w-8">
+                                                        <Trash2 className="h-4 w-4 text-destructive"/>
+                                                    </Button>
+                                                )}
+                                            </div>
+                                        </AccordionTrigger>
+                                        <AccordionContent className="space-y-4">
+                                            <FormField
+                                                control={form.control}
+                                                name={`emailVariants.${index}.subject`}
+                                                render={({ field }) => (
+                                                    <FormItem>
+                                                    <FormLabel>Email Subject</FormLabel>
+                                                    <FormControl>
+                                                        <Input placeholder="What's new this month" {...field} />
+                                                    </FormControl>
+                                                    <FormMessage />
+                                                    </FormItem>
+                                                )}
+                                            />
+                                            <FormField
+                                                control={form.control}
+                                                name={`emailVariants.${index}.body`}
+                                                render={({ field }) => (
+                                                    <FormItem>
+                                                    <FormLabel>Email Body</FormLabel>
+                                                    <FormControl>
+                                                        <Textarea placeholder="Hi {{firstName}}, ..." className="min-h-[200px]" {...field} />
+                                                    </FormControl>
+                                                     <FormDescription>Use markdown for formatting.</FormDescription>
+                                                    <FormMessage />
+                                                    </FormItem>
+                                                )}
+                                            />
+                                        </AccordionContent>
+                                    </AccordionItem>
+                                ))}
+                            </Accordion>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="mt-4"
+                                onClick={() => append({ subject: '', body: '' })}
+                            >
+                                <PlusCircle className="mr-2 h-4 w-4" />
+                                Add Variant
                             </Button>
+                             {form.formState.errors.emailVariants && (
+                                <p className="text-sm font-medium text-destructive mt-2">
+                                    {form.formState.errors.emailVariants.message || form.formState.errors.emailVariants.root?.message}
+                                </p>
+                            )}
                         </CardContent>
                     </Card>
                 </div>
@@ -374,12 +418,11 @@ export default function NewCampaignPage() {
       <AIGeneratorDialog 
         isOpen={isAiDialogOpen}
         onOpenChange={setIsAiDialogOpen}
-        onContentSelect={({ subject, body }) => {
-            form.setValue('emailSubject', subject, { shouldValidate: true });
-            form.setValue('emailBody', body, { shouldValidate: true });
+        onApplyVariants={(variants) => {
+            replace(variants);
             toast({
                 title: "Content Applied!",
-                description: "The AI-generated subject and body have been added to your campaign.",
+                description: `${variants.length} AI-generated variants have been added to your campaign.`,
             });
         }}
       />
