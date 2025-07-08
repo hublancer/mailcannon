@@ -21,6 +21,7 @@ import { auth } from '@/lib/firebase';
 import { getSmtpAccounts, addSmtpAccount, updateSmtpAccount, deleteSmtpAccount, type SmtpAccount, type SmtpAccountData } from '@/services/smtp';
 import { useToast } from '@/hooks/use-toast';
 import { sendTestEmail } from '@/app/actions/send-test-email';
+import { testSmtpConnection } from '@/app/actions/test-smtp-connection';
 
 const formSchema = z.object({
   server: z.string().min(1, 'Server is required'),
@@ -98,30 +99,16 @@ export default function SmtpAccountsPage() {
   }
 
   const handleSaveAccount = async (accountData: SmtpAccountData, accountId?: string) => {
-    if (!user) {
-        toast({ variant: "destructive", title: "Error", description: "You must be logged in." });
+    if (!user || !accountId) {
+        toast({ variant: "destructive", title: "Error", description: "You must be logged in and editing an account." });
         return;
     }
 
-    if (!accountId) { // This is an Add operation from the inline form
-        setIsSubmitting(true);
-    }
-
     try {
-        if (accountId) { // Editing existing account
-            await updateSmtpAccount(user.uid, accountId, accountData);
-            toast({ title: "Success!", description: "SMTP Account updated successfully." });
-        } else { // Adding new account
-            await addSmtpAccount(user.uid, accountData);
-            toast({ title: "Success!", description: "SMTP Account added successfully." });
-            form.reset();
-        }
+        await updateSmtpAccount(user.uid, accountId, accountData);
+        toast({ title: "Success!", description: "SMTP Account updated successfully." });
     } catch (error) {
         toast({ variant: "destructive", title: "Error", description: (error as Error).message });
-    } finally {
-        if (!accountId) {
-            setIsSubmitting(false);
-        }
     }
   };
 
@@ -166,8 +153,49 @@ export default function SmtpAccountsPage() {
     }
   };
 
-  const handleInlineFormSubmit = (data: FormValues) => {
-    handleSaveAccount(data);
+  const handleInlineFormSubmit = async (data: FormValues) => {
+    if (!user) {
+        toast({ variant: "destructive", title: "Error", description: "You must be logged in." });
+        return;
+    }
+    setIsSubmitting(true);
+    
+    toast({
+        title: "Testing Connection...",
+        description: `Verifying credentials for ${data.server}...`,
+    });
+
+    const result = await testSmtpConnection(data);
+
+    if (result.success) {
+        toast({
+            title: "Connection Successful!",
+            description: "A test email was sent to your address. Saving account...",
+        });
+        try {
+            await addSmtpAccount(user.uid, data); 
+            toast({
+                title: "Account Saved!",
+                description: "Your SMTP account has been successfully tested and saved.",
+            });
+            form.reset();
+        } catch (error) {
+            toast({
+                variant: 'destructive',
+                title: 'Failed to save account',
+                description: (error as Error).message,
+            });
+        }
+    } else {
+        toast({
+            variant: "destructive",
+            title: "Connection Failed",
+            description: result.error || "An unknown error occurred. The account was not saved.",
+            duration: 9000,
+        });
+    }
+
+    setIsSubmitting(false);
   };
 
   return (
@@ -252,7 +280,7 @@ export default function SmtpAccountsPage() {
         <CardHeader>
             <CardTitle>Add New SMTP Account</CardTitle>
             <CardDescription>
-                Use this form to add a new account. The form is pre-filled for testing.
+                Use this form to add a new account. The system will test the connection before saving.
             </CardDescription>
         </CardHeader>
         <CardContent>

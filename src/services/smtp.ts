@@ -21,7 +21,7 @@ export const addSmtpAccount = async (userId: string, accountData: SmtpAccountDat
     try {
         await addDoc(collection(db, 'users', userId, 'smtpAccounts'), {
             ...accountData,
-            status: 'Disconnected', // Start as disconnected, test will verify
+            status: 'Connected', // We now test before adding, so it starts as Connected.
         });
     } catch (error) {
         console.error("Error adding SMTP account: ", error);
