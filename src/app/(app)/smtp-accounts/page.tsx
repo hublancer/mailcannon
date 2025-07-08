@@ -2,12 +2,18 @@
 'use client';
 
 import * as React from 'react';
-import { MoreHorizontal, PowerIcon, PlusCircle, Loader2 } from 'lucide-react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import { MoreHorizontal, PowerIcon, Loader2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { Input } from '@/components/ui/input';
+import { Switch } from '@/components/ui/switch';
 import { PageHeader } from '@/components/page-header';
 import { AddSmtpAccountDialog } from '@/components/add-smtp-account-dialog';
 import { TestSmtpDialog } from '@/components/test-smtp-dialog';
@@ -17,10 +23,21 @@ import { getSmtpAccounts, addSmtpAccount, updateSmtpAccount, deleteSmtpAccount, 
 import { useToast } from '@/hooks/use-toast';
 import { sendTestEmail } from '@/app/actions/send-test-email';
 
+const formSchema = z.object({
+  server: z.string().min(1, 'Server is required'),
+  port: z.coerce.number().int().min(1, 'Port is required'),
+  username: z.string().min(1, 'Username is required'),
+  password: z.string().min(1, 'Password is required'),
+  secure: z.boolean().default(true),
+});
+
+type FormValues = z.infer<typeof formSchema>;
+
 export default function SmtpAccountsPage() {
   const [accounts, setAccounts] = React.useState<SmtpAccount[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
   const [user, setUser] = React.useState(auth.currentUser);
+  const [isSubmitting, setIsSubmitting] = React.useState(false);
   
   // Dialog states
   const [isAddEditDialogOpen, setIsAddEditDialogOpen] = React.useState(false);
@@ -33,6 +50,17 @@ export default function SmtpAccountsPage() {
   const [deletingAccount, setDeletingAccount] = React.useState<SmtpAccount | null>(null);
 
   const { toast } = useToast();
+
+  const form = useForm<FormValues>({
+    resolver: zodResolver(formSchema),
+    defaultValues: {
+      server: 'smtp.hostinger.com',
+      port: 465,
+      username: 'info@hublancer.pk',
+      password: '0300Ali$',
+      secure: true,
+    },
+  });
 
   React.useEffect(() => {
     const unsubscribeAuth = auth.onAuthStateChanged((user) => {
@@ -55,11 +83,6 @@ export default function SmtpAccountsPage() {
     }
   }, [user]);
 
-  const openAddDialog = () => {
-    setEditingAccount(null);
-    setIsAddEditDialogOpen(true);
-  }
-
   const openEditDialog = (account: SmtpAccount) => {
     setEditingAccount(account);
     setIsAddEditDialogOpen(true);
@@ -80,6 +103,11 @@ export default function SmtpAccountsPage() {
         toast({ variant: "destructive", title: "Error", description: "You must be logged in." });
         return;
     }
+
+    if (!accountId) { // This is an Add operation from the inline form
+        setIsSubmitting(true);
+    }
+
     try {
         if (accountId) { // Editing existing account
             await updateSmtpAccount(user.uid, accountId, accountData);
@@ -87,9 +115,14 @@ export default function SmtpAccountsPage() {
         } else { // Adding new account
             await addSmtpAccount(user.uid, accountData);
             toast({ title: "Success!", description: "SMTP Account added successfully." });
+            form.reset();
         }
     } catch (error) {
         toast({ variant: "destructive", title: "Error", description: (error as Error).message });
+    } finally {
+        if (!accountId) {
+            setIsSubmitting(false);
+        }
     }
   };
 
@@ -139,12 +172,7 @@ export default function SmtpAccountsPage() {
       <PageHeader
         title="SMTP Accounts"
         description="Configure and manage your SMTP server accounts for email distribution."
-      >
-        <Button onClick={openAddDialog}>
-          <PlusCircle className="mr-2" />
-          Add Account
-        </Button>
-      </PageHeader>
+      />
       <Card>
         <CardHeader>
           <CardTitle>Server Accounts</CardTitle>
@@ -160,10 +188,7 @@ export default function SmtpAccountsPage() {
           ) : accounts.length === 0 ? (
             <div className="text-center py-10 border-2 border-dashed rounded-lg">
               <h3 className="text-xl font-semibold">No SMTP Accounts Configured</h3>
-              <p className="text-muted-foreground mt-2">Get started by adding your first SMTP provider.</p>
-              <Button onClick={openAddDialog} className="mt-4">
-                Add Your First Account
-              </Button>
+              <p className="text-muted-foreground mt-2">Get started by adding your first SMTP provider below.</p>
             </div>
           ) : (
             <Table>
@@ -220,6 +245,99 @@ export default function SmtpAccountsPage() {
         </CardContent>
       </Card>
       
+      <Card className="mt-8">
+        <CardHeader>
+            <CardTitle>Add New SMTP Account</CardTitle>
+            <CardDescription>
+                Use this form to add a new account. The form is pre-filled for testing.
+            </CardDescription>
+        </CardHeader>
+        <CardContent>
+            <Form {...form}>
+                <form onSubmit={form.handleSubmit(handleSaveAccount)} className="space-y-4">
+                    <FormField
+                    control={form.control}
+                    name="server"
+                    render={({ field }) => (
+                        <FormItem>
+                        <FormLabel>Server</FormLabel>
+                        <FormControl>
+                            <Input placeholder="smtp.example.com" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                        </FormItem>
+                    )}
+                    />
+                    <div className="grid grid-cols-3 gap-4">
+                    <FormField
+                        control={form.control}
+                        name="port"
+                        render={({ field }) => (
+                        <FormItem className="col-span-1">
+                            <FormLabel>Port</FormLabel>
+                            <FormControl>
+                            <Input type="number" placeholder="465" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                        </FormItem>
+                        )}
+                    />
+                    <FormField
+                        control={form.control}
+                        name="secure"
+                        render={({ field }) => (
+                        <FormItem className="col-span-2 flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm mt-2">
+                            <div className="space-y-0.5">
+                            <FormLabel>Use SSL/TLS</FormLabel>
+                            </div>
+                            <FormControl>
+                            <Switch
+                                checked={field.value}
+                                onCheckedChange={field.onChange}
+                            />
+                            </FormControl>
+                        </FormItem>
+                        )}
+                    />
+                    </div>
+                    <FormField
+                    control={form.control}
+                    name="username"
+                    render={({ field }) => (
+                        <FormItem>
+                        <FormLabel>Username</FormLabel>
+                        <FormControl>
+                            <Input placeholder="your-username" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                        </FormItem>
+                    )}
+                    />
+                    <FormField
+                    control={form.control}
+                    name="password"
+                    render={({ field }) => (
+                        <FormItem>
+                        <FormLabel>Password / API Key</FormLabel>
+                        <FormControl>
+                            <Input type="password" {...field} />
+                        </FormControl>
+                        <FormDescription>
+                            Your password will be stored securely.
+                        </FormDescription>
+                        <FormMessage />
+                        </FormItem>
+                    )}
+                    />
+                    <Button type="submit" disabled={isSubmitting}>
+                        {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        Save Account
+                    </Button>
+                </form>
+            </Form>
+        </CardContent>
+      </Card>
+
       {/* Dialogs */}
       <AddSmtpAccountDialog 
         isOpen={isAddEditDialogOpen} 
@@ -252,5 +370,3 @@ export default function SmtpAccountsPage() {
     </>
   );
 }
-
-    
