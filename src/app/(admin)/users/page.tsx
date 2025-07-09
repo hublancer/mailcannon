@@ -142,7 +142,7 @@ export default function AdminUsersPage() {
                                                         <Button variant="ghost" size="icon"><MoreHorizontal /></Button>
                                                     </DropdownMenuTrigger>
                                                     <DropdownMenuContent align="end">
-                                                        <DropdownMenuItem disabled>View Details</DropdownMenuItem>
+                                                        <DropdownMenuItem onSelect={() => toast({ title: 'Coming Soon', description: 'User detail view is under development.' })}>View Details</DropdownMenuItem>
                                                         <DropdownMenuItem 
                                                             className={cn(user.isBanned ? "text-green-600 focus:text-green-700" : "text-destructive focus:text-destructive")} 
                                                             onSelect={() => openBanUnbanDialog(user)}>

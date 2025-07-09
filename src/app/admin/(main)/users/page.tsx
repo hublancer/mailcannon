@@ -9,7 +9,8 @@ import { Loader2, MoreHorizontal, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Badge } from '@/components/ui/badge';
-import { getAllUsers, UserProfile } from '@/services/users';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { getAllUsers, banUser, unbanUser, UserProfile } from '@/services/users';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
@@ -18,6 +19,9 @@ export default function AdminUsersPage() {
     const [users, setUsers] = React.useState<UserProfile[]>([]);
     const [isLoading, setIsLoading] = React.useState(true);
     const { toast } = useToast();
+
+    const [isBanUnbanDialogOpen, setIsBanUnbanDialogOpen] = React.useState(false);
+    const [processingUser, setProcessingUser] = React.useState<UserProfile | null>(null);
 
     React.useEffect(() => {
         const fetchUsers = async () => {
@@ -39,6 +43,34 @@ export default function AdminUsersPage() {
 
         fetchUsers();
     }, [toast]);
+    
+    const openBanUnbanDialog = (user: UserProfile) => {
+        setProcessingUser(user);
+        setIsBanUnbanDialogOpen(true);
+    };
+
+    const handleBanUnbanUser = async () => {
+        if (!processingUser) return;
+    
+        try {
+            if (processingUser.isBanned) {
+                await unbanUser(processingUser.uid);
+                toast({ title: 'Success', description: `User ${processingUser.email} has been unbanned.` });
+            } else {
+                await banUser(processingUser.uid);
+                toast({ title: 'Success', description: `User ${processingUser.email} has been banned.` });
+            }
+            // Refresh the user list
+            const fetchedUsers = await getAllUsers();
+            setUsers(fetchedUsers);
+        } catch (error) {
+            toast({ variant: 'destructive', title: 'Error', description: (error as Error).message });
+        } finally {
+            setIsBanUnbanDialogOpen(false);
+            setProcessingUser(null);
+        }
+    };
+
 
     const getStatusBadgeVariant = (status?: string) => {
         switch (status) {
@@ -85,13 +117,17 @@ export default function AdminUsersPage() {
                             </TableHeader>
                             <TableBody>
                                 {users.map((user) => (
-                                    <TableRow key={user.uid}>
+                                    <TableRow key={user.uid} className={cn(user.isBanned && 'bg-destructive/10')}>
                                         <TableCell className="font-medium">{user.email}</TableCell>
                                         <TableCell>{user.subscription?.planName || 'N/A'}</TableCell>
                                         <TableCell>
-                                            <Badge variant={getStatusBadgeVariant(user.subscription?.status)}>
-                                                {user.subscription?.status || 'N/A'}
-                                            </Badge>
+                                            {user.isBanned ? (
+                                                <Badge variant="destructive">Banned</Badge>
+                                            ) : (
+                                                <Badge variant={getStatusBadgeVariant(user.subscription?.status)}>
+                                                    {user.subscription?.status || 'N/A'}
+                                                </Badge>
+                                            )}
                                         </TableCell>
                                         <TableCell>
                                             {user.subscription?.endDate ? format(user.subscription.endDate, 'PPP') : 'N/A'}
@@ -100,15 +136,21 @@ export default function AdminUsersPage() {
                                             <Badge variant={user.role === 'admin' ? 'destructive' : 'outline'}>{user.role}</Badge>
                                         </TableCell>
                                         <TableCell className="text-right">
-                                            <DropdownMenu>
-                                                <DropdownMenuTrigger asChild>
-                                                    <Button variant="ghost" size="icon"><MoreHorizontal /></Button>
-                                                </DropdownMenuTrigger>
-                                                <DropdownMenuContent align="end">
-                                                    <DropdownMenuItem disabled>View Details</DropdownMenuItem>
-                                                    <DropdownMenuItem disabled className="text-destructive"><Trash2 className="mr-2"/> Ban User</DropdownMenuItem>
-                                                </DropdownMenuContent>
-                                            </DropdownMenu>
+                                            {user.role !== 'admin' && (
+                                                <DropdownMenu>
+                                                    <DropdownMenuTrigger asChild>
+                                                        <Button variant="ghost" size="icon"><MoreHorizontal /></Button>
+                                                    </DropdownMenuTrigger>
+                                                    <DropdownMenuContent align="end">
+                                                        <DropdownMenuItem onSelect={() => toast({ title: 'Coming Soon', description: 'User detail view is under development.' })}>View Details</DropdownMenuItem>
+                                                        <DropdownMenuItem 
+                                                            className={cn(user.isBanned ? "text-green-600 focus:text-green-700" : "text-destructive focus:text-destructive")} 
+                                                            onSelect={() => openBanUnbanDialog(user)}>
+                                                            <Trash2 className="mr-2 h-4 w-4"/> {user.isBanned ? 'Unban User' : 'Ban User'}
+                                                        </DropdownMenuItem>
+                                                    </DropdownMenuContent>
+                                                </DropdownMenu>
+                                            )}
                                         </TableCell>
                                     </TableRow>
                                 ))}
@@ -117,6 +159,25 @@ export default function AdminUsersPage() {
                     )}
                 </CardContent>
             </Card>
+
+            <AlertDialog open={isBanUnbanDialogOpen} onOpenChange={setIsBanUnbanDialogOpen}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            You are about to {processingUser?.isBanned ? 'unban' : 'ban'} the user 
+                            <span className="font-semibold">{` ${processingUser?.email}`}</span>.
+                            {processingUser?.isBanned ? ' They will regain access to the application.' : ' This will prevent them from logging in.'}
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleBanUnbanUser} className={cn(processingUser?.isBanned ? "" : "bg-destructive hover:bg-destructive/90")}>
+                           {processingUser?.isBanned ? 'Yes, Unban' : 'Yes, Ban'}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </>
     );
 }
