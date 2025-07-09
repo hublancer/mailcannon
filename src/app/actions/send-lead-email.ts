@@ -1,6 +1,6 @@
 'use server';
 
-import { db, auth } from '@/lib/firebase';
+import { db } from '@/lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import nodemailer from 'nodemailer';
 
@@ -9,18 +9,18 @@ interface SendLeadEmailParams {
     subject: string;
     html: string;
     smtpAccountId: string;
+    userId: string;
 }
 
 export async function sendLeadEmail(params: SendLeadEmailParams) {
-    const { to, subject, html, smtpAccountId } = params;
+    const { to, subject, html, smtpAccountId, userId } = params;
     
-    const user = auth.currentUser;
-    if (!user) {
+    if (!userId) {
         return { success: false, error: 'Authentication required.' };
     }
 
     try {
-        const accountDocRef = doc(db, 'users', user.uid, 'smtpAccounts', smtpAccountId);
+        const accountDocRef = doc(db, 'users', userId, 'smtpAccounts', smtpAccountId);
         const accountDoc = await getDoc(accountDocRef);
 
         if (!accountDoc.exists()) {

@@ -136,7 +136,7 @@ export default function LeadManagerPage() {
   
   // New function to handle sending the email
   const handleSendLeadEmail = async (data: SendLeadEmailFormValues) => {
-    if (!sendingEmailToLead) return;
+    if (!sendingEmailToLead || !user) return;
     
     toast({ title: "Sending...", description: `Sending email to ${sendingEmailToLead.email}` });
 
@@ -145,6 +145,7 @@ export default function LeadManagerPage() {
         subject: data.subject,
         html: data.message.replace(/\n/g, '<br>'), // Basic newline to <br> conversion
         smtpAccountId: data.smtpAccountId,
+        userId: user.uid,
     });
 
     if (result.success) {
