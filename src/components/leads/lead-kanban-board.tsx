@@ -11,9 +11,10 @@ interface LeadKanbanBoardProps {
   onEditLead: (lead: Lead) => void;
   onDeleteLead: (lead: Lead) => void;
   onUpdateLeadStatus: (leadId: string, status: LeadStatus) => void;
+  onSendEmail: (lead: Lead) => void; // New prop
 }
 
-export function LeadKanbanBoard({ leads, onEditLead, onDeleteLead, onUpdateLeadStatus }: LeadKanbanBoardProps) {
+export function LeadKanbanBoard({ leads, onEditLead, onDeleteLead, onUpdateLeadStatus, onSendEmail }: LeadKanbanBoardProps) {
   const groupedLeads = React.useMemo(() => {
     const initialGroups: Record<LeadStatus, Lead[]> = {
       'New': [],
@@ -48,6 +49,7 @@ export function LeadKanbanBoard({ leads, onEditLead, onDeleteLead, onUpdateLeadS
                     onEdit={onEditLead}
                     onDelete={onDeleteLead}
                     onUpdateStatus={onUpdateLeadStatus}
+                    onSendEmail={onSendEmail} // Pass handler
                 />
               ))}
               {groupedLeads[status].length === 0 && (

@@ -13,9 +13,10 @@ interface LeadCardProps {
   onEdit: (lead: Lead) => void;
   onDelete: (lead: Lead) => void;
   onUpdateStatus: (leadId: string, status: LeadStatus) => void;
+  onSendEmail: (lead: Lead) => void; // New prop
 }
 
-export function LeadCard({ lead, onEdit, onDelete, onUpdateStatus }: LeadCardProps) {
+export function LeadCard({ lead, onEdit, onDelete, onUpdateStatus, onSendEmail }: LeadCardProps) {
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between p-4">
@@ -50,7 +51,7 @@ export function LeadCard({ lead, onEdit, onDelete, onUpdateStatus }: LeadCardPro
                     </DropdownMenuSubContent>
                 </DropdownMenuPortal>
             </DropdownMenuSub>
-            <DropdownMenuItem disabled>
+            <DropdownMenuItem onClick={() => onSendEmail(lead)}>
               <Mail className="mr-2 h-4 w-4" />
               <span>Send Email</span>
             </DropdownMenuItem>

@@ -12,10 +12,15 @@ import { AddLeadDialog } from '@/components/leads/add-lead-dialog';
 import { EditLeadDialog } from '@/components/leads/edit-lead-dialog';
 import { LeadKanbanBoard } from '@/components/leads/lead-kanban-board';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+// New imports
+import { getSmtpAccounts, type SmtpAccount } from '@/services/smtp';
+import { SendLeadEmailDialog, type SendLeadEmailFormValues } from '@/components/leads/send-lead-email-dialog';
+import { sendLeadEmail } from '@/app/actions/send-lead-email';
 
 
 export default function LeadManagerPage() {
   const [leads, setLeads] = React.useState<Lead[]>([]);
+  const [smtpAccounts, setSmtpAccounts] = React.useState<SmtpAccount[]>([]); // New state
   const [isLoading, setIsLoading] = React.useState(true);
   const [user, setUser] = React.useState(auth.currentUser);
   const { toast } = useToast();
@@ -24,10 +29,12 @@ export default function LeadManagerPage() {
   const [isAddDialogOpen, setIsAddDialogOpen] = React.useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = React.useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = React.useState(false);
+  const [isSendEmailDialogOpen, setIsSendEmailDialogOpen] = React.useState(false); // New state
   
   // Data for dialogs
   const [editingLead, setEditingLead] = React.useState<Lead | null>(null);
   const [deletingLead, setDeletingLead] = React.useState<Lead | null>(null);
+  const [sendingEmailToLead, setSendingEmailToLead] = React.useState<Lead | null>(null); // New state
 
   React.useEffect(() => {
     const unsubscribeAuth = auth.onAuthStateChanged((user) => {
@@ -39,13 +46,22 @@ export default function LeadManagerPage() {
   React.useEffect(() => {
     if (user) {
       setIsLoading(true);
-      const unsubscribe = getLeads(user.uid, (fetchedLeads) => {
+      const unsubLeads = getLeads(user.uid, (fetchedLeads) => {
         setLeads(fetchedLeads);
+        // Don't set loading to false until both are done
+      });
+      // Fetch SMTP accounts
+      const unsubSmtp = getSmtpAccounts(user.uid, (fetchedAccounts) => {
+        setSmtpAccounts(fetchedAccounts);
         setIsLoading(false);
       });
-      return () => unsubscribe();
+      return () => {
+        unsubLeads();
+        unsubSmtp();
+      };
     } else {
       setLeads([]);
+      setSmtpAccounts([]);
       setIsLoading(false);
     }
   }, [user]);
@@ -108,6 +124,37 @@ export default function LeadManagerPage() {
     }
   };
 
+  // New function to open send email dialog
+  const openSendEmailDialog = (lead: Lead) => {
+    if (smtpAccounts.length === 0) {
+      toast({ variant: "destructive", title: "No SMTP Account", description: "Please add an SMTP account in settings before sending emails." });
+      return;
+    }
+    setSendingEmailToLead(lead);
+    setIsSendEmailDialogOpen(true);
+  };
+  
+  // New function to handle sending the email
+  const handleSendLeadEmail = async (data: SendLeadEmailFormValues) => {
+    if (!sendingEmailToLead) return;
+    
+    toast({ title: "Sending...", description: `Sending email to ${sendingEmailToLead.email}` });
+
+    const result = await sendLeadEmail({
+        to: sendingEmailToLead.email,
+        subject: data.subject,
+        html: data.message.replace(/\n/g, '<br>'), // Basic newline to <br> conversion
+        smtpAccountId: data.smtpAccountId,
+    });
+
+    if (result.success) {
+        toast({ title: "Success!", description: "Email sent successfully." });
+        setIsSendEmailDialogOpen(false);
+    } else {
+        toast({ variant: "destructive", title: "Failed to Send", description: result.error, duration: 9000 });
+    }
+  };
+
 
   return (
     <>
@@ -128,6 +175,7 @@ export default function LeadManagerPage() {
             onEditLead={openEditDialog}
             onDeleteLead={openDeleteDialog}
             onUpdateLeadStatus={handleUpdateLeadStatus}
+            onSendEmail={openSendEmailDialog} // Pass handler
         />
       )}
 
@@ -142,6 +190,15 @@ export default function LeadManagerPage() {
         onOpenChange={setIsEditDialogOpen}
         onUpdateLead={handleUpdateLead}
         lead={editingLead}
+      />
+      
+      {/* New Dialog */}
+      <SendLeadEmailDialog
+        isOpen={isSendEmailDialogOpen}
+        onOpenChange={setIsSendEmailDialogOpen}
+        onSendEmail={handleSendLeadEmail}
+        lead={sendingEmailToLead}
+        smtpAccounts={smtpAccounts}
       />
 
       <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
