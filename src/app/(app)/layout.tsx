@@ -1,3 +1,4 @@
+
 'use client';
 
 import * as React from 'react';
@@ -32,6 +33,7 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { auth } from '@/lib/firebase';
 import { signOut } from 'firebase/auth';
+import { getUserProfile } from '@/services/users';
 
 const navItems = [
   { href: '/campaigns', icon: Send, label: 'Campaigns' },
@@ -54,11 +56,17 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   }, []);
 
   React.useEffect(() => {
-    const unsubscribe = auth.onAuthStateChanged(user => {
+    const unsubscribe = auth.onAuthStateChanged(async (user) => {
       if (!user) {
         router.replace('/login');
       } else {
-        setIsCheckingAuth(false);
+        const profile = await getUserProfile(user.uid);
+        if (profile?.isBanned) {
+            await signOut(auth);
+            router.replace('/login');
+        } else {
+            setIsCheckingAuth(false);
+        }
       }
     });
     // Cleanup subscription on unmount

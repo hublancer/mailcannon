@@ -33,6 +33,13 @@ export default function LoginPage() {
     const unsubscribe = auth.onAuthStateChanged(async (user) => {
       if (user) {
         const profile = await getUserProfile(user.uid);
+        if (profile?.isBanned) {
+          setError('Your account has been suspended. Please contact support.');
+          await auth.signOut();
+          setIsCheckingAuth(false);
+          return;
+        }
+
         if (profile?.role === 'admin') {
             router.replace('/admin/dashboard');
         } else {

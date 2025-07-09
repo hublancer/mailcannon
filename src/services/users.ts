@@ -7,6 +7,7 @@ export interface UserProfile {
   email: string;
   name: string;
   role: 'admin' | 'user';
+  isBanned?: boolean;
   createdAt: Date;
   subscription?: {
     planId: string;
@@ -28,6 +29,7 @@ export const createUserProfile = async (uid: string, data: { name: string, email
         name: data.name,
         email: data.email,
         role: data.role,
+        isBanned: false,
         createdAt: serverTimestamp(),
         subscription: {
             planId: 'trial',
@@ -88,3 +90,15 @@ export const updateUserSubscription = async (userId: string, subscriptionData: U
     const userRef = doc(db, 'users', userId);
     await updateDoc(userRef, { subscription: subscriptionData });
 }
+
+export const banUser = async (uid: string): Promise<void> => {
+    if (!uid) throw new Error("User ID is required.");
+    const userRef = doc(db, 'users', uid);
+    await updateDoc(userRef, { isBanned: true });
+};
+
+export const unbanUser = async (uid:string): Promise<void> => {
+    if (!uid) throw new Error("User ID is required.");
+    const userRef = doc(db, 'users', uid);
+    await updateDoc(userRef, { isBanned: false });
+};
